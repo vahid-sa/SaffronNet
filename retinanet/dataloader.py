@@ -18,7 +18,7 @@ import skimage.color
 import skimage
 
 from PIL import Image
-
+from .settings import NUM_VARIABLES
 
 class CocoDataset(Dataset):
     """Coco dataset."""
@@ -338,6 +338,8 @@ def collater(data):
 
 class Resizer(object):
     """Convert ndarrays in sample to Tensors."""
+    """Resizer: checked!
+    """
 
     def __call__(self, sample, min_side=608, max_side=1024):
         image, annots = sample['img'], sample['annot']
@@ -366,14 +368,15 @@ class Resizer(object):
         new_image = np.zeros((rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
 
-        annots[:, :4] *= scale
+        annots[:, :NUM_VARIABLES] *= scale
 
         return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
 
 
 class Augmenter(object):
     """Convert ndarrays in sample to Tensors."""
-
+    """ #
+    """
     def __call__(self, sample, flip_x=0.5):
 
         if np.random.rand() < flip_x:
@@ -396,7 +399,8 @@ class Augmenter(object):
 
 
 class Normalizer(object):
-
+""" Normalizer: checked!
+"""
     def __init__(self):
         self.mean = np.array([[[0.485, 0.456, 0.406]]])
         self.std = np.array([[[0.229, 0.224, 0.225]]])
