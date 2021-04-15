@@ -6,6 +6,7 @@ from torchvision.ops import nms
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from retinanet.anchors import Anchors
 from retinanet import losses
+from .settings import NUM_VARIABLES
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -81,7 +82,7 @@ class RegressionModel(nn.Module):
         self.conv4 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
         self.act4 = nn.ReLU()
 
-        self.output = nn.Conv2d(feature_size, num_anchors * 4, kernel_size=3, padding=1)
+        self.output = nn.Conv2d(feature_size, num_anchors * NUM_VARIABLES, kernel_size=3, padding=1)
 
     def forward(self, x):
         out = self.conv1(x)
@@ -98,10 +99,10 @@ class RegressionModel(nn.Module):
 
         out = self.output(out)
 
-        # out is B x C x W x H, with C = 4*num_anchors
+        # out is B x C x W x H, with C = NUM_VARIABLES * num_anchors
         out = out.permute(0, 2, 3, 1)
 
-        return out.contiguous().view(out.shape[0], -1, 4)
+        return out.contiguous().view(out.shape[0], -1, NUM_VARIABLES)
 
 
 class ClassificationModel(nn.Module):
@@ -166,16 +167,16 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        if block == BasicBlock:
-            fpn_sizes = [self.layer2[layers[1] - 1].conv2.out_channels, self.layer3[layers[2] - 1].conv2.out_channels,
-                         self.layer4[layers[3] - 1].conv2.out_channels]
-        elif block == Bottleneck:
-            fpn_sizes = [self.layer2[layers[1] - 1].conv3.out_channels, self.layer3[layers[2] - 1].conv3.out_channels,
-                         self.layer4[layers[3] - 1].conv3.out_channels]
-        else:
-            raise ValueError(f"Block type {block} not understood")
+        # if block == BasicBlock:
+        #     fpn_sizes = [self.layer2[layers[1] - 1].conv2.out_channels, self.layer3[layers[2] - 1].conv2.out_channels,
+        #                  self.layer4[layers[3] - 1].conv2.out_channels]
+        # elif block == Bottleneck:
+        #     fpn_sizes = [self.layer2[layers[1] - 1].conv3.out_channels, self.layer3[layers[2] - 1].conv3.out_channels,
+        #                  self.layer4[layers[3] - 1].conv3.out_channels]
+        # else:
+        #     raise ValueError(f"Block type {block} not understood")
 
-        self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
+        # self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
 
         self.regressionModel = RegressionModel(256)
         self.classificationModel = ClassificationModel(256, num_classes=num_classes)
