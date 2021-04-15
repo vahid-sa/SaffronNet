@@ -99,29 +99,22 @@ class BBoxTransform(nn.Module):
         else:
             self.std = std
 
-    def forward(self, boxes, deltas):
+    def forward(self, center_alphas, deltas):
 
-        widths  = boxes[:, :, 2] - boxes[:, :, 0]
-        heights = boxes[:, :, 3] - boxes[:, :, 1]
-        ctr_x   = boxes[:, :, 0] + 0.5 * widths
-        ctr_y   = boxes[:, :, 1] + 0.5 * heights
+        ctr_x   = center_alphas[:, :, 0] 
+        ctr_y   = center_alphas[:, :, 1]
+        alpha  = center_alphas[:, :, 2]
+        
 
         dx = deltas[:, :, 0] * self.std[0] + self.mean[0]
         dy = deltas[:, :, 1] * self.std[1] + self.mean[1]
-        dw = deltas[:, :, 2] * self.std[2] + self.mean[2]
-        dh = deltas[:, :, 3] * self.std[3] + self.mean[3]
+        dalpha = deltas[:, :, 2] * self.std[2] + self.mean[2]
 
-        pred_ctr_x = ctr_x + dx * widths
-        pred_ctr_y = ctr_y + dy * heights
-        pred_w     = torch.exp(dw) * widths
-        pred_h     = torch.exp(dh) * heights
+        pred_ctr_x = ctr_x + dx 
+        pred_ctr_y = ctr_y + dy 
+        pred_alpha = alpha + dalpha 
 
-        pred_boxes_x1 = pred_ctr_x - 0.5 * pred_w
-        pred_boxes_y1 = pred_ctr_y - 0.5 * pred_h
-        pred_boxes_x2 = pred_ctr_x + 0.5 * pred_w
-        pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
-
-        pred_boxes = torch.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], dim=2)
+        pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_alpha], dim=2)
 
         return pred_boxes
 
@@ -131,14 +124,14 @@ class ClipBoxes(nn.Module):
     def __init__(self, width=None, height=None):
         super(ClipBoxes, self).__init__()
 
-    def forward(self, boxes, img):
+    def forward(self, center_alphas, img):
 
         batch_size, num_channels, height, width = img.shape
 
-        boxes[:, :, 0] = torch.clamp(boxes[:, :, 0], min=0)
-        boxes[:, :, 1] = torch.clamp(boxes[:, :, 1], min=0)
+        center_alphas[:, :, 0] = torch.clamp(center_alphas[:, :, 0], min=0)
+        center_alphas[:, :, 1] = torch.clamp(center_alphas[:, :, 1], min=0)
 
-        boxes[:, :, 2] = torch.clamp(boxes[:, :, 2], max=width)
-        boxes[:, :, 3] = torch.clamp(boxes[:, :, 3], max=height)
+        center_alphas[:, :, 0] = torch.clamp(center_alphas[:, :, 0], max=width)
+        center_alphas[:, :, 1] = torch.clamp(center_alphas[:, :, 1], max=height)
       
-        return boxes
+        return center_alphas
