@@ -148,7 +148,7 @@ class CSVDataset(Dataset):
         for key, value in self.classes.items():
             self.labels[value] = key
 
-        # csv with img_path, x1, y1, x2, y2, class_name
+        # csv with img_path, ctr_x, ctr_y, alpha, class_name
         try:
             with self._open_for_csv(self.train_file) as file:
                 self.image_data = self._read_annotations(csv.reader(file, delimiter=','), self.classes)
@@ -220,7 +220,7 @@ class CSVDataset(Dataset):
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotation_list = self.image_data[self.image_names[image_index]]
-        annotations     = np.zeros((0, 5))
+        annotations     = np.zeros((0, NUM_VARIABLES+1))
 
         # some images appear to miss annotations (like image with id 257034)
         if len(annotation_list) == 0:
@@ -229,22 +229,20 @@ class CSVDataset(Dataset):
         # parse annotations
         for idx, a in enumerate(annotation_list):
             # some annotations have basically no width / height, skip them
-            x1 = a['x1']
-            x2 = a['x2']
-            y1 = a['y1']
-            y2 = a['y2']
+            ctr_x = a['x']
+            ctr_y = a['y']
+            alpha = a['alpha']
 
-            if (x2-x1) < 1 or (y2-y1) < 1:
-                continue
+            # if (x2-x1) < 1 or (y2-y1) < 1:
+            #     continue
 
-            annotation        = np.zeros((1, 5))
+            annotation        = np.zeros((1, NUM_VARIABLES+1))
             
-            annotation[0, 0] = x1
-            annotation[0, 1] = y1
-            annotation[0, 2] = x2
-            annotation[0, 3] = y2
+            annotation[0, 0] = ctr_x
+            annotation[0, 1] = ctr_y
+            annotation[0, 2] = alpha
 
-            annotation[0, 4]  = self.name_to_label(a['class'])
+            annotation[0, 3]  = self.name_to_label(a['class'])
             annotations       = np.append(annotations, annotation, axis=0)
 
         return annotations
@@ -255,33 +253,32 @@ class CSVDataset(Dataset):
             line += 1
 
             try:
-                img_file, x1, y1, x2, y2, class_name = row[:6]
+                img_file, ctr_x, ctr_y, alpha, class_name = row[:6]
             except ValueError:
-                raise_from(ValueError('line {}: format should be \'img_file,x1,y1,x2,y2,class_name\' or \'img_file,,,,,\''.format(line)), None)
+                raise_from(ValueError('line {}: format should be \'img_file,ctr_x,ctr_y,alpha,class_name\' or \'img_file,,,,,\''.format(line)), None)
 
             if img_file not in result:
                 result[img_file] = []
 
             # If a row contains only an image path, it's an image without annotations.
-            if (x1, y1, x2, y2, class_name) == ('', '', '', '', ''):
+            if (ctr_x, ctr_y, alpha, class_name) == ('', '', '', ''):
                 continue
 
-            x1 = self._parse(x1, int, 'line {}: malformed x1: {{}}'.format(line))
-            y1 = self._parse(y1, int, 'line {}: malformed y1: {{}}'.format(line))
-            x2 = self._parse(x2, int, 'line {}: malformed x2: {{}}'.format(line))
-            y2 = self._parse(y2, int, 'line {}: malformed y2: {{}}'.format(line))
+            ctr_x = self._parse(ctr_x, int, 'line {}: malformed ctr_x: {{}}'.format(line))
+            ctr_y = self._parse(ctr_y, int, 'line {}: malformed ctr_y: {{}}'.format(line))
+            alpha = self._parse(alpha, int, 'line {}: malformed alpha: {{}}'.format(line))
 
-            # Check that the bounding box is valid.
-            if x2 <= x1:
-                raise ValueError('line {}: x2 ({}) must be higher than x1 ({})'.format(line, x2, x1))
-            if y2 <= y1:
-                raise ValueError('line {}: y2 ({}) must be higher than y1 ({})'.format(line, y2, y1))
+            # # Check that the bounding box is valid.
+            # if x2 <= x1:
+            #     raise ValueError('line {}: x2 ({}) must be higher than x1 ({})'.format(line, x2, x1))
+            # if y2 <= y1:
+            #     raise ValueError('line {}: y2 ({}) must be higher than y1 ({})'.format(line, y2, y1))
 
             # check if the current class name is correctly present
             if class_name not in classes:
                 raise ValueError('line {}: unknown class name: \'{}\' (classes: {})'.format(line, class_name, classes))
 
-            result[img_file].append({'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2, 'class': class_name})
+            result[img_file].append({'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name})
         return result
 
     def name_to_label(self, name):
@@ -321,7 +318,7 @@ def collater(data):
     
     if max_num_annots > 0:
 
-        annot_padded = torch.ones((len(annots), max_num_annots, 5)) * -1
+        annot_padded = torch.ones((len(annots), max_num_annots, NUM_VARIABLES+1)) * -1
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):
@@ -329,7 +326,7 @@ def collater(data):
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:
-        annot_padded = torch.ones((len(annots), 1, 5)) * -1
+        annot_padded = torch.ones((len(annots), 1, NUM_VARIABLES+1)) * -1
 
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
@@ -385,13 +382,8 @@ class Augmenter(object):
 
             rows, cols, channels = image.shape
 
-            x1 = annots[:, 0].copy()
-            x2 = annots[:, 2].copy()
-            
-            x_tmp = x1.copy()
-
-            annots[:, 0] = cols - x2
-            annots[:, 2] = cols - x_tmp
+            x = annots[:, 0].copy()
+            annots[:, 0] = cols - x
 
             sample = {'img': image, 'annot': annots}
 
