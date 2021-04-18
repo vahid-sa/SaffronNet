@@ -5,34 +5,56 @@ import json
 import os
 import matplotlib.pyplot as plt
 import torch
+from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
+def __prepare(a, b):
+    # repeat in rows
+    repetitions = a.shape[0]
+    bt = np.tile(b, (repetitions, 1))
+    # repeat in cols
+    repetitions = b.shape[0]
+    at = np.transpose([a] * repetitions)
+    return at, bt
 
-def compute_overlap(a, b):
+
+def __distance(ax, bx):
+    """ 
+    ax: (N) ndarray of float
+    bx: (K) ndarray of float
+    Returns
+    -------
+    (N, K) ndarray of distance between all x in ax, bx
+    """
+    ax, bx = __prepare(ax, bx)
+    return np.abs(ax - bx)
+
+
+def compute_distance(a, b):
     """
     Parameters
     ----------
-    a: (N, 4) ndarray of float
-    b: (K, 4) ndarray of float
+    a: (N, 3) ndarray of float
+    b: (K, 3) ndarray of float
     Returns
     -------
-    overlaps: (N, K) ndarray of overlap between boxes and query_boxes
+    distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
     """
-    area = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
+    ax = a[:, 0]
+    bx = b[:, 0]
 
-    iw = np.minimum(np.expand_dims(a[:, 2], axis=1), b[:, 2]) - np.maximum(np.expand_dims(a[:, 0], 1), b[:, 0])
-    ih = np.minimum(np.expand_dims(a[:, 3], axis=1), b[:, 3]) - np.maximum(np.expand_dims(a[:, 1], 1), b[:, 1])
+    ay = a[:, 1]
+    by = b[:, 1]
 
-    iw = np.maximum(iw, 0)
-    ih = np.maximum(ih, 0)
+    aa = a[:, 2]
+    ba = b[:, 2]
 
-    ua = np.expand_dims((a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1]), axis=1) + area - iw * ih
+    dalpha = __distance(ax=aa, bx=ba)
+    dx = __distance(ax=ax, bx=bx)
+    dy = __distance(ax=ay, bx=by)
+    dxy = np.sqrt(dx*dx + dy*dy)
 
-    ua = np.maximum(ua, np.finfo(float).eps)
-
-    intersection = iw * ih
-
-    return intersection / ua
+    return dxy, dalpha
 
 
 def _compute_ap(recall, precision):
@@ -75,10 +97,11 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
     # Returns
         A list of lists containing the detections for each image in the generator.
     """
-    all_detections = [[None for i in range(dataset.num_classes())] for j in range(len(dataset))]
+    all_detections = [[None for i in range(
+        dataset.num_classes())] for j in range(len(dataset))]
 
     retinanet.eval()
-    
+
     with torch.no_grad():
 
         for index in range(len(dataset)):
@@ -87,12 +110,14 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
 
             # run network
             if torch.cuda.is_available():
-                scores, labels, boxes = retinanet(data['img'].permute(2, 0, 1).cuda().float().unsqueeze(dim=0))
+                scores, labels, boxes = retinanet(data['img'].permute(
+                    2, 0, 1).cuda().float().unsqueeze(dim=0))
             else:
-                scores, labels, boxes = retinanet(data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
+                scores, labels, boxes = retinanet(
+                    data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
             scores = scores.cpu().numpy()
             labels = labels.cpu().numpy()
-            boxes  = boxes.cpu().numpy()
+            boxes = boxes.cpu().numpy()
 
             # correct boxes for image scale
             boxes /= scale
@@ -107,10 +132,11 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
                 scores_sort = np.argsort(-scores)[:max_detections]
 
                 # select detections
-                image_boxes      = boxes[indices[scores_sort], :]
-                image_scores     = scores[scores_sort]
-                image_labels     = labels[indices[scores_sort]]
-                image_detections = np.concatenate([image_boxes, np.expand_dims(image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
+                image_boxes = boxes[indices[scores_sort], :]
+                image_scores = scores[scores_sort]
+                image_labels = labels[indices[scores_sort]]
+                image_detections = np.concatenate([image_boxes, np.expand_dims(
+                    image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
 
                 # copy detections to all_detections
                 for label in range(dataset.num_classes()):
@@ -134,7 +160,8 @@ def _get_annotations(generator):
     # Returns
         A list of lists containing the annotations for each image in the generator.
     """
-    all_annotations = [[None for i in range(generator.num_classes())] for j in range(len(generator))]
+    all_annotations = [[None for i in range(
+        generator.num_classes())] for j in range(len(generator))]
 
     for i in range(len(generator)):
         # load the annotations
@@ -142,7 +169,8 @@ def _get_annotations(generator):
 
         # copy detections to all_annotations
         for label in range(generator.num_classes()):
-            all_annotations[i][label] = annotations[annotations[:, 4] == label, :4].copy()
+            all_annotations[i][label] = annotations[annotations[:, 4]
+                                                    == label, :4].copy()
 
         print('{}/{}'.format(i + 1, len(generator)), end='\r')
 
@@ -152,7 +180,8 @@ def _get_annotations(generator):
 def evaluate(
     generator,
     retinanet,
-    iou_threshold=0.5,
+    XYd_threshold=MAX_ANOT_ANCHOR_POSITION_DISTANCE,
+    Ad_threshold=MAX_ANOT_ANCHOR_ANGLE_DISTANCE,
     score_threshold=0.05,
     max_detections=100,
     save_path=None
@@ -169,25 +198,24 @@ def evaluate(
         A dict mapping class names to mAP scores.
     """
 
-
-
     # gather all detections and annotations
 
-    all_detections     = _get_detections(generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
-    all_annotations    = _get_annotations(generator)
+    all_detections = _get_detections(
+        generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
+    all_annotations = _get_annotations(generator)
 
     average_precisions = {}
 
     for label in range(generator.num_classes()):
         false_positives = np.zeros((0,))
-        true_positives  = np.zeros((0,))
-        scores          = np.zeros((0,))
+        true_positives = np.zeros((0,))
+        scores = np.zeros((0,))
         num_annotations = 0.0
 
         for i in range(len(generator)):
-            detections           = all_detections[i][label]
-            annotations          = all_annotations[i][label]
-            num_annotations     += annotations.shape[0]
+            detections = all_detections[i][label]
+            annotations = all_annotations[i][label]
+            num_annotations += annotations.shape[0]
             detected_annotations = []
 
             for d in detections:
@@ -195,20 +223,25 @@ def evaluate(
 
                 if annotations.shape[0] == 0:
                     false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
+                    true_positives = np.append(true_positives, 0)
                     continue
 
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
+                dxys, dangels = compute_distance(
+                    np.expand_dims(d, axis=0), annotations)
 
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
+                distances = (
+                    2 * dxys) + (dangels * (MAX_ANOT_ANCHOR_POSITION_DISTANCE / MAX_ANOT_ANCHOR_ANGLE_DISTANCE))
+                assigned_annotation = np.argmin(distances, axis=1)
+                min_dxy = dxys[0, assigned_annotation]
+                min_dangel = dangels[0, assigned_annotation]
+
+                if min_dxy <= XYd_threshold and min_dangel <= Ad_threshold and assigned_annotation not in detected_annotations:
                     false_positives = np.append(false_positives, 0)
-                    true_positives  = np.append(true_positives, 1)
+                    true_positives = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
                 else:
                     false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
+                    true_positives = np.append(true_positives, 0)
 
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
@@ -216,44 +249,42 @@ def evaluate(
             continue
 
         # sort by score
-        indices         = np.argsort(-scores)
+        indices = np.argsort(-scores)
         false_positives = false_positives[indices]
-        true_positives  = true_positives[indices]
+        true_positives = true_positives[indices]
 
         # compute false positives and true positives
         false_positives = np.cumsum(false_positives)
-        true_positives  = np.cumsum(true_positives)
+        true_positives = np.cumsum(true_positives)
 
         # compute recall and precision
-        recall    = true_positives / num_annotations
-        precision = true_positives / np.maximum(true_positives + false_positives, np.finfo(np.float64).eps)
+        recall = true_positives / num_annotations
+        precision = true_positives / \
+            np.maximum(true_positives + false_positives,
+                       np.finfo(np.float64).eps)
 
         # compute average precision
-        average_precision  = _compute_ap(recall, precision)
+        average_precision = _compute_ap(recall, precision)
         average_precisions[label] = average_precision, num_annotations
-
 
     print('\nmAP:')
     for label in range(generator.num_classes()):
         label_name = generator.label_to_name(label)
         print('{}: {}'.format(label_name, average_precisions[label][0]))
-        print("Precision: ",precision[-1])
-        print("Recall: ",recall[-1])
-        
-        if save_path!=None:
-            plt.plot(recall,precision)
-            # naming the x axis 
-            plt.xlabel('Recall') 
-            # naming the y axis 
-            plt.ylabel('Precision') 
+        print("Precision: ", precision[-1])
+        print("Recall: ", recall[-1])
 
-            # giving a title to my graph 
-            plt.title('Precision Recall curve') 
+        if save_path != None:
+            plt.plot(recall, precision)
+            # naming the x axis
+            plt.xlabel('Recall')
+            # naming the y axis
+            plt.ylabel('Precision')
+
+            # giving a title to my graph
+            plt.title('Precision Recall curve')
 
             # function to show the plot
             plt.savefig(save_path+'/'+label_name+'_precision_recall.jpg')
 
-
-
     return average_precisions
-
