@@ -9,12 +9,12 @@ from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_D
 
 
 def __prepare(a, b):
-    # repeat in rows
-    repetitions = a.shape[0]
-    bt = np.tile(b, (repetitions, 1))
-    # repeat in cols
+    # extend as cols
     repetitions = b.shape[0]
     at = np.transpose([a] * repetitions)
+    # extend as rows
+    repetitions = a.shape[0]
+    bt = np.tile(b, (repetitions, 1))
     return at, bt
 
 
