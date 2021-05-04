@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 from .settings import ANGLE_SPLIT, NUM_VARIABLES, STRIDE
-from anchor_utils import *
+from .anchor_utils import *
 
 
 class Anchors(nn.Module):
