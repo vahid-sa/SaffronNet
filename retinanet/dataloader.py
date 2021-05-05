@@ -276,11 +276,11 @@ class CSVDataset(Dataset):
             print(ctr_x, ctr_y, alpha)
             print(type(ctr_x), type(ctr_y), type(alpha))
             ctr_x = self._parse(
-                ctr_x, int, 'line {}: malformed ctr_x: {{}}'.format(line))
+                float(ctr_x), int, 'line {}: malformed ctr_x: {{}}'.format(line))
             ctr_y = self._parse(
-                ctr_y, int, 'line {}: malformed ctr_y: {{}}'.format(line))
+                float(ctr_y), int, 'line {}: malformed ctr_y: {{}}'.format(line))
             alpha = self._parse(
-                alpha, int, 'line {}: malformed alpha: {{}}'.format(line))
+                float(alpha), int, 'line {}: malformed alpha: {{}}'.format(line))
 
             # # Check that the bounding box is valid.
             # if x2 <= x1:
