@@ -169,10 +169,10 @@ class CSVDataset(Dataset):
         Any `ValueError` raised is catched and a new `ValueError` is raised
         with message `fmt.format(e)`, where `e` is the caught `ValueError`.
         """
-        try:
+       try:
             return function(value)
         except ValueError as e:
-            raise_from(ValueError(fmt.format(e)), None)
+            raise (ValueError(fmt.format(e)), None)
 
     def _open_for_csv(self, path):
         """
@@ -264,7 +264,7 @@ class CSVDataset(Dataset):
             try:
                 img_file, ctr_x, ctr_y, alpha, class_name = row[:5]
             except ValueError:
-                raise_from(ValueError(
+                raise (ValueError(
                     'line {}: format should be \'img_file,ctr_x,ctr_y,alpha,class_name\' or \'img_file,,,,,\''.format(line)), None)
 
             if img_file not in result:
