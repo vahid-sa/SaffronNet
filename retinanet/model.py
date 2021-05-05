@@ -22,25 +22,33 @@ class PyramidFeatures(nn.Module):
         super(PyramidFeatures, self).__init__()
 
         # upsample C5 to get P5 from the FPN paper
-        self.P5_1 = nn.Conv2d(C5_size, feature_size, kernel_size=1, stride=1, padding=0)
+        self.P5_1 = nn.Conv2d(C5_size, feature_size,
+                              kernel_size=1, stride=1, padding=0)
         self.P5_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P5_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P5_2 = nn.Conv2d(feature_size, feature_size,
+                              kernel_size=3, stride=1, padding=1)
 
         # add P5 elementwise to C4
-        self.P4_1 = nn.Conv2d(C4_size, feature_size, kernel_size=1, stride=1, padding=0)
+        self.P4_1 = nn.Conv2d(C4_size, feature_size,
+                              kernel_size=1, stride=1, padding=0)
         self.P4_upsampled = nn.Upsample(scale_factor=2, mode='nearest')
-        self.P4_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P4_2 = nn.Conv2d(feature_size, feature_size,
+                              kernel_size=3, stride=1, padding=1)
 
         # add P4 elementwise to C3
-        self.P3_1 = nn.Conv2d(C3_size, feature_size, kernel_size=1, stride=1, padding=0)
-        self.P3_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=1, padding=1)
+        self.P3_1 = nn.Conv2d(C3_size, feature_size,
+                              kernel_size=1, stride=1, padding=0)
+        self.P3_2 = nn.Conv2d(feature_size, feature_size,
+                              kernel_size=3, stride=1, padding=1)
 
         # "P6 is obtained via a 3x3 stride-2 conv on C5"
-        self.P6 = nn.Conv2d(C5_size, feature_size, kernel_size=3, stride=2, padding=1)
+        self.P6 = nn.Conv2d(C5_size, feature_size,
+                            kernel_size=3, stride=2, padding=1)
 
         # "P7 is computed by applying ReLU followed by a 3x3 stride-2 conv on P6"
         self.P7_1 = nn.ReLU()
-        self.P7_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
+        self.P7_2 = nn.Conv2d(feature_size, feature_size,
+                              kernel_size=3, stride=2, padding=1)
 
     def forward(self, inputs):
         C3, C4, C5 = inputs
@@ -70,19 +78,24 @@ class RegressionModel(nn.Module):
     def __init__(self, num_features_in, num_anchors=9, feature_size=256):
         super(RegressionModel, self).__init__()
 
-        self.conv1 = nn.Conv2d(num_features_in, feature_size, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(
+            num_features_in, feature_size, kernel_size=3, padding=1)
         self.act1 = nn.ReLU()
 
-        self.conv2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act2 = nn.ReLU()
 
-        self.conv3 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act3 = nn.ReLU()
 
-        self.conv4 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act4 = nn.ReLU()
 
-        self.output = nn.Conv2d(feature_size, num_anchors * NUM_VARIABLES, kernel_size=3, padding=1)
+        self.output = nn.Conv2d(
+            feature_size, num_anchors * NUM_VARIABLES, kernel_size=3, padding=1)
 
     def forward(self, x):
         out = self.conv1(x)
@@ -112,19 +125,24 @@ class ClassificationModel(nn.Module):
         self.num_classes = num_classes
         self.num_anchors = num_anchors
 
-        self.conv1 = nn.Conv2d(num_features_in, feature_size, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(
+            num_features_in, feature_size, kernel_size=3, padding=1)
         self.act1 = nn.ReLU()
 
-        self.conv2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act2 = nn.ReLU()
 
-        self.conv3 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act3 = nn.ReLU()
 
-        self.conv4 = nn.Conv2d(feature_size, feature_size, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(feature_size, feature_size,
+                               kernel_size=3, padding=1)
         self.act4 = nn.ReLU()
 
-        self.output = nn.Conv2d(feature_size, num_anchors * num_classes, kernel_size=3, padding=1)
+        self.output = nn.Conv2d(
+            feature_size, num_anchors * num_classes, kernel_size=3, padding=1)
         self.output_act = nn.Sigmoid()
 
     def forward(self, x):
@@ -148,7 +166,8 @@ class ClassificationModel(nn.Module):
 
         batch_size, width, height, channels = out1.shape
 
-        out2 = out1.view(batch_size, width, height, self.num_anchors, self.num_classes)
+        out2 = out1.view(batch_size, width, height,
+                         self.num_anchors, self.num_classes)
 
         return out2.contiguous().view(x.shape[0], -1, self.num_classes)
 
@@ -158,7 +177,8 @@ class ResNet(nn.Module):
     def __init__(self, num_classes, block, layers):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
+                               stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -167,19 +187,9 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        # if block == BasicBlock:
-        #     fpn_sizes = [self.layer2[layers[1] - 1].conv2.out_channels, self.layer3[layers[2] - 1].conv2.out_channels,
-        #                  self.layer4[layers[3] - 1].conv2.out_channels]
-        # elif block == Bottleneck:
-        #     fpn_sizes = [self.layer2[layers[1] - 1].conv3.out_channels, self.layer3[layers[2] - 1].conv3.out_channels,
-        #                  self.layer4[layers[3] - 1].conv3.out_channels]
-        # else:
-        #     raise ValueError(f"Block type {block} not understood")
-
-        # self.fpn = PyramidFeatures(fpn_sizes[0], fpn_sizes[1], fpn_sizes[2])
-
         self.regressionModel = RegressionModel(256)
-        self.classificationModel = ClassificationModel(256, num_classes=num_classes)
+        self.classificationModel = ClassificationModel(
+            256, num_classes=num_classes)
 
         self.anchors = Anchors()
 
@@ -200,7 +210,8 @@ class ResNet(nn.Module):
         prior = 0.01
 
         self.classificationModel.output.weight.data.fill_(0)
-        self.classificationModel.output.bias.data.fill_(-math.log((1.0 - prior) / prior))
+        self.classificationModel.output.bias.data.fill_(
+            -math.log((1.0 - prior) / prior))
 
         self.regressionModel.output.weight.data.fill_(0)
         self.regressionModel.output.bias.data.fill_(0)
@@ -246,11 +257,9 @@ class ResNet(nn.Module):
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
 
-        features = self.fpn([x2, x3, x4])
+        regression = self.regressionModel(x4)
 
-        regression = torch.cat([self.regressionModel(feature) for feature in features], dim=1)
-
-        classification = torch.cat([self.classificationModel(feature) for feature in features], dim=1)
+        classification = self.classificationModel(x4)
 
         anchors = self.anchors(img_batch)
 
@@ -258,7 +267,8 @@ class ResNet(nn.Module):
             return self.focalLoss(classification, regression, anchors, annotations)
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
-            transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
+            transformed_anchors = self.clipBoxes(
+                transformed_anchors, img_batch)
 
             finalResult = [[], [], []]
 
@@ -284,19 +294,22 @@ class ResNet(nn.Module):
                 anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
 
                 finalResult[0].extend(scores[anchors_nms_idx])
-                finalResult[1].extend(torch.tensor([i] * anchors_nms_idx.shape[0]))
+                finalResult[1].extend(torch.tensor(
+                    [i] * anchors_nms_idx.shape[0]))
                 finalResult[2].extend(anchorBoxes[anchors_nms_idx])
 
                 finalScores = torch.cat((finalScores, scores[anchors_nms_idx]))
-                finalAnchorBoxesIndexesValue = torch.tensor([i] * anchors_nms_idx.shape[0])
+                finalAnchorBoxesIndexesValue = torch.tensor(
+                    [i] * anchors_nms_idx.shape[0])
                 if torch.cuda.is_available():
                     finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
 
-                finalAnchorBoxesIndexes = torch.cat((finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
-                finalAnchorBoxesCoordinates = torch.cat((finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+                finalAnchorBoxesIndexes = torch.cat(
+                    (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
+                finalAnchorBoxesCoordinates = torch.cat(
+                    (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
 
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
-
 
 
 def resnet18(num_classes, pretrained=False, **kwargs):
@@ -306,7 +319,8 @@ def resnet18(num_classes, pretrained=False, **kwargs):
     """
     model = ResNet(num_classes, BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet18'], model_dir='.'), strict=False)
+        model.load_state_dict(model_zoo.load_url(
+            model_urls['resnet18'], model_dir='.'), strict=False)
     return model
 
 
@@ -317,7 +331,8 @@ def resnet34(num_classes, pretrained=False, **kwargs):
     """
     model = ResNet(num_classes, BasicBlock, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet34'], model_dir='.'), strict=False)
+        model.load_state_dict(model_zoo.load_url(
+            model_urls['resnet34'], model_dir='.'), strict=False)
     return model
 
 
@@ -328,7 +343,8 @@ def resnet50(num_classes, pretrained=False, **kwargs):
     """
     model = ResNet(num_classes, Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet50'], model_dir='.'), strict=False)
+        model.load_state_dict(model_zoo.load_url(
+            model_urls['resnet50'], model_dir='.'), strict=False)
     return model
 
 
@@ -339,7 +355,8 @@ def resnet101(num_classes, pretrained=False, **kwargs):
     """
     model = ResNet(num_classes, Bottleneck, [3, 4, 23, 3], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet101'], model_dir='.'), strict=False)
+        model.load_state_dict(model_zoo.load_url(
+            model_urls['resnet101'], model_dir='.'), strict=False)
     return model
 
 
@@ -350,5 +367,6 @@ def resnet152(num_classes, pretrained=False, **kwargs):
     """
     model = ResNet(num_classes, Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['resnet152'], model_dir='.'), strict=False)
+        model.load_state_dict(model_zoo.load_url(
+            model_urls['resnet152'], model_dir='.'), strict=False)
     return model
