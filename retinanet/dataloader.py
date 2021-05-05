@@ -169,7 +169,7 @@ class CSVDataset(Dataset):
         Any `ValueError` raised is catched and a new `ValueError` is raised
         with message `fmt.format(e)`, where `e` is the caught `ValueError`.
         """
-       try:
+        try:
             return function(value)
         except ValueError as e:
             raise (ValueError(fmt.format(e)), None)
