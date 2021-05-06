@@ -6,7 +6,7 @@ from torchvision.ops import nms
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from retinanet.anchors import Anchors
 from retinanet import losses
-from .settings import NUM_VARIABLES
+from .settings import NUM_VARIABLES, ANGLE_SPLIT
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -260,10 +260,12 @@ class ResNet(nn.Module):
         x4 = self.layer4(x3)
 
         regression = self.regressionModel(x4)
-
         classification = self.classificationModel(x4)
-
         anchors = self.anchors(img_batch)
+
+        print('regression.shape: ', regression.shape)
+        print('classification.shape: ', classification.shape)
+        print('anchors.shape: ', anchors.shape)
 
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
