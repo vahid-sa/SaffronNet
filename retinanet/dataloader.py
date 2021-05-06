@@ -273,8 +273,6 @@ class CSVDataset(Dataset):
             # If a row contains only an image path, it's an image without annotations.
             if (ctr_x, ctr_y, alpha, class_name) == ('', '', '', ''):
                 continue
-            print(ctr_x, ctr_y, alpha)
-            print(type(ctr_x), type(ctr_y), type(alpha))
             ctr_x = self._parse(
                 float(ctr_x), int, 'line {}: malformed ctr_x: {{}}'.format(line))
             ctr_y = self._parse(
