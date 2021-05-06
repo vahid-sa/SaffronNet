@@ -247,6 +247,8 @@ class ResNet(nn.Module):
         else:
             img_batch = inputs
 
+        print('img_batch.shape: ', img_batch.shape)
+
         x = self.conv1(img_batch)
         x = self.bn1(x)
         x = self.relu(x)
