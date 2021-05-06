@@ -258,12 +258,12 @@ class ResNet(nn.Module):
         x2 = self.layer2(x1)
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
-
+        print(" in forward 01")
         regression = self.regressionModel(x4)
         classification = self.classificationModel(x4)
         anchors = self.anchors(img_batch)
 
-        print('regression.shape: ', regression.shape)
+        print('regression.shape: ', regression.size)
         print('classification.shape: ', classification.shape)
         print('anchors.shape: ', anchors.shape)
 
