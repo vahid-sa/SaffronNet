@@ -187,9 +187,9 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        self.regressionModel = RegressionModel(2048)
+        self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
-            2048, num_classes=num_classes)
+            512, num_classes=num_classes)
 
         self.anchors = Anchors()
 
