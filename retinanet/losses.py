@@ -198,11 +198,14 @@ class FocalLoss(nn.Module):
                     targets = targets/torch.Tensor([[1, 1, 1]])
                 negative_indices = 1 + (~positive_indices)
 
+                print("N1")
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
 
+                print("N2")
                 regression_diff_angle = 1 - torch.cos(
                     targets[:, 2] - regression[positive_indices, 2])
+                print("N3")
 
                 regression_diff = regression_diff_angle + regression_diff_xy
 
