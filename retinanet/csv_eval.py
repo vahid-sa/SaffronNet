@@ -5,7 +5,7 @@ import json
 import os
 import matplotlib.pyplot as plt
 import torch
-from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
+from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, NUM_VARIABLES
 
 
 def __prepare(a, b):
@@ -144,7 +144,8 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
             else:
                 # copy detections to all_detections
                 for label in range(dataset.num_classes()):
-                    all_detections[index][label] = np.zeros((0, 5))
+                    all_detections[index][label] = np.zeros(
+                        (0, NUM_VARIABLES+1))
 
             print('{}/{}'.format(index + 1, len(dataset)), end='\r')
 
@@ -169,8 +170,8 @@ def _get_annotations(generator):
 
         # copy detections to all_annotations
         for label in range(generator.num_classes()):
-            all_annotations[i][label] = annotations[annotations[:, 3]
-                                                    == label, :3].copy()
+            all_annotations[i][label] = annotations[annotations[:, NUM_VARIABLES]
+                                                    == label, :NUM_VARIABLES].copy()
 
         print('{}/{}'.format(i + 1, len(generator)), end='\r')
 
@@ -219,7 +220,7 @@ def evaluate(
             detected_annotations = []
 
             for d in detections:
-                scores = np.append(scores, d[4])
+                scores = np.append(scores, d[NUM_VARIABLES])
 
                 if annotations.shape[0] == 0:
                     false_positives = np.append(false_positives, 1)
