@@ -211,7 +211,6 @@ class FocalLoss(nn.Module):
                 )
                 regression_losses.append(
                     regression_loss_xy.mean() + regression_diff_angle.mean())
-                print("N5")
             else:
                 if torch.cuda.is_available():
                     regression_losses.append(torch.tensor(0).float().cuda())
