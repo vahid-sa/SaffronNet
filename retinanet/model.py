@@ -273,7 +273,7 @@ class ResNet(nn.Module):
             finalScores = torch.Tensor([])
             finalAnchorBoxesIndexes = torch.Tensor([]).long()
             finalAnchorBoxesCoordinates = torch.Tensor([])
-
+            print("N1")
             if torch.cuda.is_available():
                 finalScores = finalScores.cuda()
                 finalAnchorBoxesIndexes = finalAnchorBoxesIndexes.cuda()
@@ -286,6 +286,7 @@ class ResNet(nn.Module):
                     # no boxes to NMS, just continue
                     continue
 
+                print("N2")
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
@@ -302,6 +303,7 @@ class ResNet(nn.Module):
                 if torch.cuda.is_available():
                     finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
 
+                print("N3")
                 finalAnchorBoxesIndexes = torch.cat(
                     (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
                 finalAnchorBoxesCoordinates = torch.cat(
