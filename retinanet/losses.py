@@ -206,14 +206,16 @@ class FocalLoss(nn.Module):
                 regression_diff_angle = 1 - torch.cos(
                     targets[:, 2] - regression[positive_indices, 2])
                 print("N3")
-
+                print('regression_diff_angle: ', regression_diff_angle)
                 regression_diff = regression_diff_angle + regression_diff_xy
 
+                print("N4")
                 regression_loss = torch.where(
                     torch.le(regression_diff, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff, 2),
                     regression_diff - 0.5 / 9.0
                 )
+                print("N5")
                 regression_losses.append(regression_loss.mean())
             else:
                 if torch.cuda.is_available():
