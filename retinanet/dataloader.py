@@ -337,7 +337,6 @@ def collater(data):
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):
-                # print(annot.shape)
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:

@@ -51,11 +51,6 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
-        print(classifications.shape)
-        print(regressions.shape)
-        print(anchors.shape)
-        print(annotations.shape)
-        print(annotations)
         alpha = 0.25
         gamma = 2.0
         batch_size = classifications.shape[0]
@@ -116,16 +111,8 @@ class FocalLoss(nn.Module):
             # num_anchors x num_annotations
             distance, deltaphi = calc_distance(anchors[0, :, :],
                                                center_alpha_annotation[:, :NUM_VARIABLES])
-            print('distance shape: ', distance.shape)
-            print('deltaphi shape: ', deltaphi.shape)
-            print('distance: ', distance)
-            print('deltaphi: ', deltaphi)
             distance_min, distance_argmin = torch.min(
                 distance, dim=1)  # num_anchors x 1
-            print('distance_min shape: ', distance_min.shape)
-            print('distance_argmin shape: ', distance_argmin.shape)
-            print('distance_min: ', distance_min)
-            print('distance_argmin: ', distance_argmin)
             deltaphi_min, deltaphi_argmin = torch.min(
                 deltaphi, dim=1)  # num_anchors x 1
 
@@ -204,7 +191,6 @@ class FocalLoss(nn.Module):
                 targets = torch.stack(
                     (targets_dx, targets_dy, targets_dalpha))
                 targets = targets.t()
-                print('targets.shape: ', targets.shape)
                 if torch.cuda.is_available():
                     targets = targets / \
                         torch.Tensor([[1, 1, 1]]).cuda()
