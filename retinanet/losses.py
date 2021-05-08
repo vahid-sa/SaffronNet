@@ -198,25 +198,20 @@ class FocalLoss(nn.Module):
                     targets = targets/torch.Tensor([[1, 1, 1]])
                 negative_indices = 1 + (~positive_indices)
 
-                print("N1")
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
 
-                print("N2")
                 regression_diff_angle = 1 - torch.cos(
                     targets[:, 2] - regression[positive_indices, 2])
-                print("N3")
-                print('regression_diff_angle: ', regression_diff_angle)
-                regression_diff = regression_diff_angle + regression_diff_xy
 
-                print("N4")
-                regression_loss = torch.where(
-                    torch.le(regression_diff, 1.0 / 9.0),
-                    0.5 * 9.0 * torch.pow(regression_diff, 2),
-                    regression_diff - 0.5 / 9.0
+                regression_loss_xy = torch.where(
+                    torch.le(regression_diff_xy, 1.0 / 9.0),
+                    0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
+                    regression_diff_xy - 0.5 / 9.0
                 )
+                regression_losses.append(
+                    regression_loss_xy.mean() + regression_diff_angle.mean())
                 print("N5")
-                regression_losses.append(regression_loss.mean())
             else:
                 if torch.cuda.is_available():
                     regression_losses.append(torch.tensor(0).float().cuda())
