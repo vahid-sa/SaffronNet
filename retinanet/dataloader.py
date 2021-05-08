@@ -129,7 +129,7 @@ class CocoDataset(Dataset):
 class CSVDataset(Dataset):
     """CSV dataset."""
 
-    def __init__(self, train_file, class_list, transform=None):
+    def __init__(self, train_file, class_list, images_dir, image_extension=".jpg", transform=None):
         """
         Args:
             train_file (string): CSV file with training annotations
@@ -139,6 +139,8 @@ class CSVDataset(Dataset):
         self.train_file = train_file
         self.class_list = class_list
         self.transform = transform
+        self.img_dir = images_dir
+        self.ext = image_extension
 
         # parse the provided class file
         try:
@@ -172,7 +174,7 @@ class CSVDataset(Dataset):
         try:
             return function(value)
         except ValueError as e:
-            raise (ValueError(fmt.format(e)), None)
+            raise ValueError(fmt.format(e))
 
     def _open_for_csv(self, path):
         """
@@ -262,17 +264,24 @@ class CSVDataset(Dataset):
             line += 1
 
             try:
-                img_file, ctr_x, ctr_y, alpha, class_name = row[:5]
+                img_id, ctr_x, ctr_y, alpha, class_name, truth_status = row[:6]
+            except IndexError:
+                img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
+                truth_status = "ground_truth"
             except ValueError:
-                raise (ValueError(
-                    'line {}: format should be \'img_file,ctr_x,ctr_y,alpha,class_name\' or \'img_file,,,,,\''.format(line)), None)
+                raise ValueError(
+                    'line {}: format should be \'img_file,ctr_x,ctr_y,alpha,class_name\' or \'img_file,,,,,\''.format(
+                        line)
+                )
 
+            img_file = os.path.join(self.img_dir, img_id + self.ext)
             if img_file not in result:
                 result[img_file] = []
 
             # If a row contains only an image path, it's an image without annotations.
             if (ctr_x, ctr_y, alpha, class_name) == ('', '', '', ''):
                 continue
+
             ctr_x = self._parse(
                 float(ctr_x), int, 'line {}: malformed ctr_x: {{}}'.format(line))
             ctr_y = self._parse(
@@ -280,6 +289,13 @@ class CSVDataset(Dataset):
             alpha = self._parse(
                 float(alpha), int, 'line {}: malformed alpha: {{}}'.format(line))
 
+            if truth_status == "ground_truth":
+                is_ground_truth = True
+            elif truth_status == "predicted":
+                is_ground_truth = False
+            else:
+                raise AssertionError(
+                    "truth_status field can be 'ground_truth' or 'predicted' ")
             # # Check that the bounding box is valid.
             # if x2 <= x1:
             #     raise ValueError('line {}: x2 ({}) must be higher than x1 ({})'.format(line, x2, x1))
@@ -292,7 +308,7 @@ class CSVDataset(Dataset):
                     line, class_name, classes))
 
             result[img_file].append(
-                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name})
+                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name, 'ground_truth': is_ground_truth})
         return result
 
     def name_to_label(self, name):
@@ -337,6 +353,7 @@ def collater(data):
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):
+                # print(annot.shape)
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:
