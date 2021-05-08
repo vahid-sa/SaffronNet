@@ -39,8 +39,7 @@ def main(args=None):
     parser.add_argument(
         '--ext', help='image file extention', type=str, default='.jpg')
 
-    parser.add_argument(
-        '--image_dir', help='image files direction', type=str)
+    parser.add_argument('--images_dir', help='image files direction', type=str)
     parser.add_argument('--epochs', help='Number of epochs',
                         type=int, default=100)
 
