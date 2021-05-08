@@ -263,8 +263,8 @@ class ResNet(nn.Module):
         print('x2.size: ', x2.size())
         print('x3.size: ', x3.size())
         print('x3.size: ', x4.size())
-        regression = self.regressionModel(x4)
-        classification = self.classificationModel(x4)
+        regression = self.regressionModel(x2)
+        classification = self.classificationModel(x2)
         anchors = self.anchors(img_batch)
 
         print('regression.shape: ', regression.size())

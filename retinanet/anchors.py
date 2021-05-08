@@ -12,7 +12,7 @@ class Anchors(nn.Module):
     def forward(self, image):
 
         image_shape = image.shape[2:]
-
+        print('in anchors image_shape: ', image_shape)
         # compute anchors over all pyramid levels
         all_anchors = np.zeros((0, NUM_VARIABLES)).astype(np.float32)
 
