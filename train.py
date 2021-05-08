@@ -73,7 +73,7 @@ def main(args=None):
             print('No validation annotations provided.')
         else:
             dataset_val = CSVDataset(train_file=parser.csv_val, class_list=parser.csv_classes,
-                                     transform=transforms.Compose([Normalizer(), Resizer()]))
+                                     transform=transforms.Compose([Normalizer(), Resizer()]), images_dir=parser.images_dir, image_extension=parser.ext)
 
     else:
         raise ValueError(
