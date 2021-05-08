@@ -75,7 +75,7 @@ class PyramidFeatures(nn.Module):
 
 
 class RegressionModel(nn.Module):
-    def __init__(self, num_features_in, num_anchors=9, feature_size=256):
+    def __init__(self, num_features_in, num_anchors=ANGLE_SPLIT, feature_size=256):
         super(RegressionModel, self).__init__()
 
         self.conv1 = nn.Conv2d(
@@ -119,7 +119,7 @@ class RegressionModel(nn.Module):
 
 
 class ClassificationModel(nn.Module):
-    def __init__(self, num_features_in, num_anchors=9, num_classes=80, prior=0.01, feature_size=256):
+    def __init__(self, num_features_in, num_anchors=ANGLE_SPLIT, num_classes=80, prior=0.01, feature_size=256):
         super(ClassificationModel, self).__init__()
 
         self.num_classes = num_classes
@@ -187,6 +187,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
+        print('num_classes: ', num_classes)
         self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
             512, num_classes=num_classes)
