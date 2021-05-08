@@ -61,21 +61,21 @@ def main(args=None):
                 'Must provide --csv_classes when training on COCO,')
 
         dataset_train = CSVDataset(train_file=parser.csv_train, class_list=parser.csv_classes,
-                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                                   transform=transforms.Compose([Normalizer(), Augmenter()]))  # , Resizer()]))
 
         if parser.csv_val is None:
             dataset_val = None
             print('No validation annotations provided.')
         else:
             dataset_val = CSVDataset(train_file=parser.csv_val, class_list=parser.csv_classes,
-                                     transform=transforms.Compose([Normalizer(), Resizer()]))
+                                     transform=transforms.Compose([Normalizer()]))  # , Resizer()]))
 
     else:
         raise ValueError(
             'Dataset type not understood (must be csv or coco), exiting.')
 
     sampler = AspectRatioBasedSampler(
-        dataset_train, batch_size=2, drop_last=False)
+        dataset_train, batch_size=1, drop_last=False)
     dataloader_train = DataLoader(
         dataset_train, num_workers=3, collate_fn=collater, batch_sampler=sampler)
 
