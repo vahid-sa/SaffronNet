@@ -169,8 +169,8 @@ def _get_annotations(generator):
 
         # copy detections to all_annotations
         for label in range(generator.num_classes()):
-            all_annotations[i][label] = annotations[annotations[:, 4]
-                                                    == label, :4].copy()
+            all_annotations[i][label] = annotations[annotations[:, 3]
+                                                    == label, :3].copy()
 
         print('{}/{}'.format(i + 1, len(generator)), end='\r')
 
