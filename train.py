@@ -35,6 +35,12 @@ def main(args=None):
 
     parser.add_argument(
         '--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
+
+    parser.add_argument(
+        '--ext', help='image file extention', type=str, default='.jpg')
+
+    parser.add_argument(
+        '--image_dir', help='image files direction', type=str)
     parser.add_argument('--epochs', help='Number of epochs',
                         type=int, default=100)
 
@@ -61,7 +67,7 @@ def main(args=None):
                 'Must provide --csv_classes when training on COCO,')
 
         dataset_train = CSVDataset(train_file=parser.csv_train, class_list=parser.csv_classes,
-                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]))
+                                   transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]), images_dir=parser.images_dir, image_extension=parser.ext)
 
         if parser.csv_val is None:
             dataset_val = None
