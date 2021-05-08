@@ -302,12 +302,10 @@ class ResNet(nn.Module):
                 if torch.cuda.is_available():
                     finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
 
-                print("N2")
                 finalAnchorBoxesIndexes = torch.cat(
                     (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
                 finalAnchorBoxesCoordinates = torch.cat(
                     (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
-                print("N3")
 
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
