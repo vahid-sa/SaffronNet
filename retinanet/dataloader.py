@@ -358,17 +358,18 @@ class Resizer(object):
 
         rows, cols, cns = image.shape
 
-        smallest_side = min(rows, cols)
+        # smallest_side = min(rows, cols)
 
-        # rescale the image so the smallest side is min_side
-        scale = min_side / smallest_side
+        # # rescale the image so the smallest side is min_side
+        # scale = min_side / smallest_side
 
-        # check if the largest side is now greater than max_side, which can happen
-        # when images have a large aspect ratio
-        largest_side = max(rows, cols)
+        # # check if the largest side is now greater than max_side, which can happen
+        # # when images have a large aspect ratio
+        # largest_side = max(rows, cols)
 
-        if largest_side * scale > max_side:
-            scale = max_side / largest_side
+        # if largest_side * scale > max_side:
+        #     scale = max_side / largest_side
+        scale = 1
 
         # resize the image with the computed scale
         image = skimage.transform.resize(
