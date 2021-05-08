@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def generate_anchors(angle_split, num_variables):
     """
     Generate (reference) anchors 
@@ -11,7 +12,7 @@ def generate_anchors(angle_split, num_variables):
 
     b = (360 / angle_split)
     anchors[:, -1] = [0+b*n for n in range(angle_split)]
-
+    print('base anchors: ', anchors)
     return anchors
 
 
@@ -39,16 +40,24 @@ def shift(shape, stride, anchors):
         stride : Stride to shift the anchors with over the shape.
         anchors: The anchors to apply at each location.
     """
+    print('shape: ', shape)
+    print('stride: ', stride)
+    print('anchors: ', anchors)
     # create a grid starting from half stride from the top left corner
-    shift_x = (np.arange(0, shape[1]) + 0.5) * stride
-    shift_y = (np.arange(0, shape[0]) + 0.5) * stride
+    shift_x = (np.arange(0, shape[1] // stride) + 0.5) * stride
+    shift_y = (np.arange(0, shape[0] // stride) + 0.5) * stride
+    print('shift_x: ', shift_x)
+    print('shift_y: ', shift_y)
 
     shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+    print('shift_x: ', shift_x)
+    print('shift_y: ', shift_y)
 
     shifts = np.vstack((
         shift_x.ravel(), shift_y.ravel(),
         np.zeros_like(shift_y).ravel()
     )).transpose()
+    print('shifts: ', shifts)
 
     # add A anchors (1, A, 3) to
     # cell K shifts (K, 1, 3) to get
@@ -59,5 +68,5 @@ def shift(shape, stride, anchors):
     all_anchors = (anchors.reshape((1, A, 3)) +
                    shifts.reshape((1, K, 3)).transpose((1, 0, 2)))
     all_anchors = all_anchors.reshape((K * A, 3))
-
+    print('all_anchors: ', all_anchors)
     return all_anchors
