@@ -264,8 +264,6 @@ class CSVDataset(Dataset):
             line += 1
 
             try:
-                img_id, ctr_x, ctr_y, alpha, class_name, truth_status = row[:6]
-            except IndexError:
                 img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
                 truth_status = "ground_truth"
             except ValueError:
