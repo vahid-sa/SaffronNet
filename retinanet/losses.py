@@ -116,10 +116,16 @@ class FocalLoss(nn.Module):
             # num_anchors x num_annotations
             distance, deltaphi = calc_distance(anchors[0, :, :],
                                                center_alpha_annotation[:, :NUM_VARIABLES])
-
+            print('distance shape: ', distance.shape)
+            print('deltaphi shape: ', deltaphi.shape)
+            print('distance: ', distance)
+            print('deltaphi: ', deltaphi)
             distance_min, distance_argmin = torch.min(
                 distance, dim=1)  # num_anchors x 1
-
+            print('distance_min shape: ', distance_min.shape)
+            print('distance_argmin shape: ', distance_argmin.shape)
+            print('distance_min: ', distance_min)
+            print('distance_argmin: ', distance_argmin)
             deltaphi_min, deltaphi_argmin = torch.min(
                 deltaphi, dim=1)  # num_anchors x 1
 
