@@ -63,6 +63,7 @@ class FocalLoss(nn.Module):
         anchor_ctr_y = anchor[:, 1]
         anchor_alpha = anchor[:, 2]
 
+        print("N2")
         for j in range(batch_size):
 
             classification = classifications[j, :, :]
@@ -71,6 +72,7 @@ class FocalLoss(nn.Module):
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
                 center_alpha_annotation[:, NUM_VARIABLES] != -1]
+            print("N3")
 
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
@@ -107,6 +109,7 @@ class FocalLoss(nn.Module):
                     regression_losses.append(torch.tensor(0).float())
 
                 continue
+            print("N4")
 
             # num_anchors x num_annotations
             distance, deltaphi = calc_distance(anchors[0, :, :],
@@ -142,9 +145,10 @@ class FocalLoss(nn.Module):
             assigned_annotations = center_alpha_annotation[distance_argmin, :]
 
             targets[positive_indices, :] = 0
+            print("N5")
             targets[positive_indices,
                     assigned_annotations[positive_indices, 4].long()] = 1
-
+            print("N6")
 # -------------------------------------------------------------------------
 
             if torch.cuda.is_available():
@@ -217,5 +221,6 @@ class FocalLoss(nn.Module):
                     regression_losses.append(torch.tensor(0).float().cuda())
                 else:
                     regression_losses.append(torch.tensor(0).float())
+        print("N7")
 
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), torch.stack(regression_losses).mean(dim=0, keepdim=True)

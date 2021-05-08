@@ -187,7 +187,6 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        print('num_classes: ', num_classes)
         self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
             512, num_classes=num_classes)
@@ -248,8 +247,6 @@ class ResNet(nn.Module):
         else:
             img_batch = inputs
 
-        print('img_batch.shape: ', img_batch.shape)
-
         x = self.conv1(img_batch)
         x = self.bn1(x)
         x = self.relu(x)
@@ -259,20 +256,13 @@ class ResNet(nn.Module):
         x2 = self.layer2(x1)
         # x3 = self.layer3(x2)
         # x4 = self.layer4(x3)
-        print('x.size: ', x.size())
-        print('x1.size: ', x1.size())
-        print('x2.size: ', x2.size())
-        # print('x3.size: ', x3.size())
-        # print('x3.size: ', x4.size())
+
         regression = self.regressionModel(x2)
         classification = self.classificationModel(x2)
         anchors = self.anchors(img_batch)
 
-        print('regression.shape: ', regression.size())
-        print('classification.shape: ', classification.size())
-        print('anchors.shape: ', anchors.size())
-
         if self.training:
+            print("N1")
             return self.focalLoss(classification, regression, anchors, annotations)
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
