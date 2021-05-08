@@ -79,40 +79,44 @@ class Bottleneck(nn.Module):
 
         return out
 
+
 class BBoxTransform(nn.Module):
 
     def __init__(self, mean=None, std=None):
         super(BBoxTransform, self).__init__()
         if mean is None:
             if torch.cuda.is_available():
-                self.mean = torch.from_numpy(np.array([0, 0, 0, 0]).astype(np.float32)).cuda()
+                self.mean = torch.from_numpy(
+                    np.array([0, 0, 0]).astype(np.float32)).cuda()
             else:
-                self.mean = torch.from_numpy(np.array([0, 0, 0, 0]).astype(np.float32))
+                self.mean = torch.from_numpy(
+                    np.array([0, 0, 0]).astype(np.float32))
 
         else:
             self.mean = mean
         if std is None:
             if torch.cuda.is_available():
-                self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32)).cuda()
+                self.std = torch.from_numpy(
+                    np.array([1, 1, 1]).astype(np.float32)).cuda()
             else:
-                self.std = torch.from_numpy(np.array([0.1, 0.1, 0.2, 0.2]).astype(np.float32))
+                self.std = torch.from_numpy(
+                    np.array([1, 1, 1]).astype(np.float32))
         else:
             self.std = std
 
     def forward(self, center_alphas, deltas):
 
-        ctr_x   = center_alphas[:, :, 0] 
-        ctr_y   = center_alphas[:, :, 1]
-        alpha  = center_alphas[:, :, 2]
-        
+        ctr_x = center_alphas[:, :, 0]
+        ctr_y = center_alphas[:, :, 1]
+        alpha = center_alphas[:, :, 2]
 
         dx = deltas[:, :, 0] * self.std[0] + self.mean[0]
         dy = deltas[:, :, 1] * self.std[1] + self.mean[1]
         dalpha = deltas[:, :, 2] * self.std[2] + self.mean[2]
 
-        pred_ctr_x = ctr_x + dx 
-        pred_ctr_y = ctr_y + dy 
-        pred_alpha = alpha + dalpha 
+        pred_ctr_x = ctr_x + dx
+        pred_ctr_y = ctr_y + dy
+        pred_alpha = alpha + dalpha
 
         pred_boxes = torch.stack([pred_ctr_x, pred_ctr_y, pred_alpha], dim=2)
 
@@ -132,6 +136,7 @@ class ClipBoxes(nn.Module):
         center_alphas[:, :, 1] = torch.clamp(center_alphas[:, :, 1], min=0)
 
         center_alphas[:, :, 0] = torch.clamp(center_alphas[:, :, 0], max=width)
-        center_alphas[:, :, 1] = torch.clamp(center_alphas[:, :, 1], max=height)
-      
+        center_alphas[:, :, 1] = torch.clamp(
+            center_alphas[:, :, 1], max=height)
+
         return center_alphas

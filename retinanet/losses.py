@@ -63,7 +63,6 @@ class FocalLoss(nn.Module):
         anchor_ctr_y = anchor[:, 1]
         anchor_alpha = anchor[:, 2]
 
-        print("N2")
         for j in range(batch_size):
 
             classification = classifications[j, :, :]
@@ -72,7 +71,6 @@ class FocalLoss(nn.Module):
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
                 center_alpha_annotation[:, NUM_VARIABLES] != -1]
-            print("N3")
 
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
@@ -109,7 +107,6 @@ class FocalLoss(nn.Module):
                     regression_losses.append(torch.tensor(0).float())
 
                 continue
-            print("N4")
 
             # num_anchors x num_annotations
             distance, deltaphi = calc_distance(anchors[0, :, :],
@@ -145,16 +142,15 @@ class FocalLoss(nn.Module):
             assigned_annotations = center_alpha_annotation[distance_argmin, :]
 
             targets[positive_indices, :] = 0
-            print("N5")
             targets[positive_indices,
                     assigned_annotations[positive_indices, 3].long()] = 1
-            print("N6")
 # -------------------------------------------------------------------------
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
             else:
                 alpha_factor = torch.ones(targets.shape) * alpha
+            print("N5")
 
             alpha_factor = torch.where(
                 torch.eq(targets, 1.), alpha_factor, 1. - alpha_factor)
@@ -201,10 +197,10 @@ class FocalLoss(nn.Module):
 
                 if torch.cuda.is_available():
                     targets = targets / \
-                        torch.Tensor([[0.1, 0.1, 0.2, 0.2]]).cuda()
+                        torch.Tensor([[1, 1, 1]]).cuda()
                 else:
-                    targets = targets/torch.Tensor([[0.1, 0.1, 0.2, 0.2]])
-
+                    targets = targets/torch.Tensor([[1, 1, 1]])
+                print("N6")
                 negative_indices = 1 + (~positive_indices)
 
                 regression_diff = torch.abs(
