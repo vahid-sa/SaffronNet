@@ -147,7 +147,7 @@ class FocalLoss(nn.Module):
             targets[positive_indices, :] = 0
             print("N5")
             targets[positive_indices,
-                    assigned_annotations[positive_indices, 4].long()] = 1
+                    assigned_annotations[positive_indices, 3].long()] = 1
             print("N6")
 # -------------------------------------------------------------------------
 
