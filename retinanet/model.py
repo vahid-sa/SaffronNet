@@ -187,9 +187,9 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
 
-        self.regressionModel = RegressionModel(256)
+        self.regressionModel = RegressionModel(2048)
         self.classificationModel = ClassificationModel(
-            256, num_classes=num_classes)
+            2048, num_classes=num_classes)
 
         self.anchors = Anchors()
 
@@ -258,8 +258,11 @@ class ResNet(nn.Module):
         x2 = self.layer2(x1)
         x3 = self.layer3(x2)
         x4 = self.layer4(x3)
-        print('x4.size: ', x4.size())
-        print(" in forward 01")
+        print('x.size: ', x.size())
+        print('x1.size: ', x1.size())
+        print('x2.size: ', x2.size())
+        print('x3.size: ', x3.size())
+        print('x3.size: ', x4.size())
         regression = self.regressionModel(x4)
         classification = self.classificationModel(x4)
         anchors = self.anchors(img_batch)
