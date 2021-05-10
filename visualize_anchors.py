@@ -15,7 +15,7 @@ import copy
 import pdb
 import time
 import argparse
-
+from retinanet.settings import *
 import skimage
 import sys
 import cv2 as cv
