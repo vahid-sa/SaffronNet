@@ -113,6 +113,8 @@ def main(args=None):
                 half_line=True
             )
         image_name = os.path.basename(dataset.image_names[i])
+        print(image.shape)
+        print(image.dtype)
         cv.imwrite(os.path.join(parser.save_dir, image_name),
                    cv.cvtColor(image, cv.COLOR_RGB2BGR))
 
