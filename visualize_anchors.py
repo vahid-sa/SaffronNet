@@ -7,6 +7,7 @@ import pdb
 import time
 import argparse
 
+import skimage
 import sys
 import cv2
 
@@ -52,8 +53,8 @@ def main(args=None):
 
     print(len(dataset))
     print(dataset.load_image(0))
-    plt.imshow(dataset.load_image(0).imag)
-    plt.show()
+    viewer = skimage.viewer.ImageViewer(dataset.load_image(0) * 255)
+    viewer.show()
 
 
 if __name__ == '__main__':
