@@ -60,11 +60,12 @@ def main(args=None):
         image = (dataset.load_image(i) * 255).astype(np.int32)
         anots = dataset.load_annotations(i)
         for anot in anots:
-            x, y, alpha = anot[0], anot[1], anot[2]
+            x, y, alpha = anot[0], anot[1], 90 - anot[2]
             image = draw_line(
                 image, (x, y), alpha,
                 line_color=(0, 0, 0),
-                center_color=(0, 0, 0)
+                center_color=(255, 0, 0),
+                half_line=True
             )
 
         image_name = os.path.basename(dataset.image_names[i])
