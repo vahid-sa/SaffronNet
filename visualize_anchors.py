@@ -116,7 +116,7 @@ def main(args=None):
         print(image.shape)
         print(image.dtype)
         cv.imwrite(os.path.join(parser.save_dir, image_name),
-                   cv.cvtColor(image, cv.COLOR_RGB2BGR))
+                   cv.cvtColor(image.astype(np.uint8), cv.COLOR_RGB2BGR))
 
 
 if __name__ == '__main__':
