@@ -94,8 +94,8 @@ def main(args=None):
         targets[positive_indices,
                 assigned_annotations[positive_indices, 3]] = 1
 
-        anchors = anchors[0, :, :]
-        for anchor in anchors[targets.squeeze() == 1]:
+        _anchors = anchors[0, :, :]
+        for anchor in _anchors[targets.squeeze() == 1]:
             x, y, alpha = anchor[0], anchor[1], anchor[2]
             image = draw_line(
                 image, (x, y), alpha,
@@ -113,8 +113,6 @@ def main(args=None):
                 half_line=True
             )
         image_name = os.path.basename(dataset.image_names[i])
-        print(image.shape)
-        print(image.dtype)
         cv.imwrite(os.path.join(parser.save_dir, image_name),
                    cv.cvtColor(image.astype(np.uint8), cv.COLOR_RGB2BGR))
 
