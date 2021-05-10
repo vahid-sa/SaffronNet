@@ -37,10 +37,14 @@ def main(args=None):
         '--csv_anots', help='Path to file containing list of anotations'
     )
 
+    parser.add_argument(
+        '--images_dir', help='images base folder'
+    )
+
     parser = parser.parse_args(args)
 
     if parser.dataset == 'csv':
-        dataset = CSVDataset(train_file=parser.csv_anots, class_list=parser.csv_classes,
+        dataset = CSVDataset(train_file=parser.csv_anots, class_list=parser.csv_classes, images_dir=parser.images_dir
                              transform=transforms.Compose([Normalizer(), Resizer()]))
     else:
         raise ValueError(
