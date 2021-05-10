@@ -75,8 +75,8 @@ def main(args=None):
 
     sample_image = (dataset.load_image(0) * 255).astype(np.int32)
     sample_batch = np.expand_dims(sample_image, axis=0)
-    sample_batch = sample_batch.permute(0, 3, 1, 2)
-    print(sample_batch)
+    sample_batch = sample_batch.transpose(0, 3, 1, 2)
+    print(sample_batch.shape)
     anchros_mudole = Anchors()
     anchors = anchros_mudole(sample_batch)
     print(anchors)
