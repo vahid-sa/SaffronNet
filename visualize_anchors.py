@@ -1,7 +1,7 @@
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     UnNormalizer, Normalizer
 
-from .utils import write_angle
+from utils.visutils import write_angle, draw_line
 import matplotlib.pyplot as plt
 from torchvision import datasets, models, transforms
 from torch.utils.data import Dataset, DataLoader
