@@ -69,7 +69,8 @@ def main(args=None):
             )
 
         image_name = os.path.basename(dataset.image_names[i])
-        cv.imwrite(os.path.join(parser.save_dir, image_name), image)
+        cv.imwrite(os.path.join(parser.save_dir, image_name),
+                   cv.cvtColor(image, cv.COLOR_RGB2BGR))
 
 
 if __name__ == '__main__':
