@@ -1,3 +1,9 @@
+from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
+    UnNormalizer, Normalizer
+import matplotlib.pyplot as plt
+from torchvision import datasets, models, transforms
+from torch.utils.data import Dataset, DataLoader
+import torch
 import numpy as np
 import torchvision
 import time
@@ -10,13 +16,7 @@ import argparse
 import skimage
 import sys
 import cv2
-
-import torch
-from torch.utils.data import Dataset, DataLoader
-from torchvision import datasets, models, transforms
-import matplotlib.pyplot as plt
-from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
-    UnNormalizer, Normalizer
+%matplotlib inline
 
 
 assert torch.__version__.split('.')[0] == '1'
@@ -54,9 +54,8 @@ def main(args=None):
     print(len(dataset))
     image = dataset.load_image(0)
     image = (image * 255).astype(np.int32)
-    print(image)
     plt.imshow(image)
-    plt.show()
+    plt.show())
 
 
 if __name__ == '__main__':
