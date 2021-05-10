@@ -91,10 +91,19 @@ def main(args=None):
 
         _anchors = anchors[0, :, :]
         for anchor in _anchors[targets.squeeze() == 1]:
-            x, y, alpha = anchor[0], anchor[1], anchor[2]
+            x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
             image = draw_line(
                 image, (x, y), alpha,
                 line_color=(0, 255, 0),
+                center_color=(0, 0, 255),
+                half_line=True,
+                distance_thresh=60
+            )
+        for anchor in _anchors[targets.squeeze() == -1]:
+            x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
+            image = draw_line(
+                image, (x, y), alpha,
+                line_color=(255, 255, 0),
                 center_color=(0, 0, 255),
                 half_line=True,
                 distance_thresh=60
