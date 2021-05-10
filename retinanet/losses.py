@@ -44,7 +44,7 @@ def calc_distance(a, b):
     dy = __distance(ax=ay, bx=by)
     dxy = torch.sqrt(dx*dx + dy*dy)
 
-    return dxy, dalpha
+    return 10 * dxy + dalpha
 
 
 class FocalLoss(nn.Module):

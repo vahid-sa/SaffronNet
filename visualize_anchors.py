@@ -69,41 +69,34 @@ def main(args=None):
 
         targets = torch.ones((anchors.shape[1], 1)) * -1
 
-        distance, deltaphi = calc_distance(torch.tensor(anchors[0, :, :]),
+        distance = calc_distance(torch.tensor(anchors[0, :, :]),
                                            torch.tensor(anots[:, :NUM_VARIABLES]))
         distance_min, distance_argmin = torch.min(
             distance, dim=1)  # num_anchors x 1
-        deltaphi_min, deltaphi_argmin = torch.min(
-            deltaphi, dim=1)  # num_anchors x 1
-        print('deltaphi_min: ', deltaphi_min.max())
+
         targets[torch.ge(
             distance_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
-        targets[torch.ge(
-            deltaphi_min, 2 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
-        positive_indices = torch.logical_and(
-            torch.le(distance_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
-            torch.le(deltaphi_min, MAX_ANOT_ANCHOR_ANGLE_DISTANCE))
+        positive_indices = torch.le(distance_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE))
 
-        num_positive_anchors = positive_indices.sum()
+        num_positive_anchors=positive_indices.sum()
 
         # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
-        assigned_annotations = anots[distance_argmin, :]
+        assigned_annotations=anots[distance_argmin, :]
 
-        targets[positive_indices, :] = 0
+        targets[positive_indices, :]=0
         targets[positive_indices,
                 assigned_annotations[positive_indices, 3]] = 1
 
-        _anchors = anchors[0, :, :]
+        _anchors = anchors[0, : , : ]
         for anchor in _anchors[targets.squeeze() == 1]:
-            print('anchor: ', anchor)
             x, y, alpha = anchor[0], anchor[1], anchor[2]
             image = draw_line(
                 image, (x, y), alpha,
-                line_color=(0, 255, 0),
-                center_color=(0, 0, 255),
-                half_line=True,
-                distance_thresh=60
+                line_color = (0, 255, 0),
+                center_color = (0, 0, 255),
+                half_line = True,
+                distance_thresh = 60
             )
         for anot in anots:
             x, y, alpha = anot[0], anot[1], 90 - anot[2]
