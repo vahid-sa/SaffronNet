@@ -15,8 +15,7 @@ import argparse
 
 import skimage
 import sys
-import cv2
-%matplotlib inline
+import cv2 as cv
 
 
 assert torch.__version__.split('.')[0] == '1'
@@ -51,11 +50,9 @@ def main(args=None):
         raise ValueError(
             'Dataset type not understood (must be csv or coco), exiting.')
 
-    print(len(dataset))
     image = dataset.load_image(0)
     image = (image * 255).astype(np.int32)
-    plt.imshow(image)
-    plt.show())
+    cv.imwrite('/content/tmp.jpg', image)
 
 
 if __name__ == '__main__':
