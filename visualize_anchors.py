@@ -57,29 +57,57 @@ def main(args=None):
         raise ValueError(
             'Dataset type not understood (must be csv or coco), exiting.')
 
-    # for i in range(len(dataset)):
-    #     image = (dataset.load_image(i) * 255).astype(np.int32)
-    #     anots = dataset.load_annotations(i)
-    #     for anot in anots:
-    #         x, y, alpha = anot[0], anot[1], 90 - anot[2]
-    #         image = draw_line(
-    #             image, (x, y), alpha,
-    #             line_color=(0, 0, 0),
-    #             center_color=(255, 0, 0),
-    #             half_line=True
-    #         )
-
-    #     image_name = os.path.basename(dataset.image_names[i])
-    #     cv.imwrite(os.path.join(parser.save_dir, image_name),
-    #                cv.cvtColor(image, cv.COLOR_RGB2BGR))
-
     sample_image = (dataset.load_image(0) * 255).astype(np.int32)
     sample_batch = np.expand_dims(sample_image, axis=0)
     sample_batch = sample_batch.transpose(0, 3, 1, 2)
-    print(sample_batch.shape)
     anchros_mudole = Anchors()
     anchors = anchros_mudole(sample_batch)
-    print(anchors)
+
+    for i in range(len(dataset)):
+        image = (dataset.load_image(i) * 255).astype(np.int32)
+        anots = dataset.load_annotations(i)
+
+        targets = torch.ones((anchors.shape[1], 1)) * -1
+        if torch.cuda.is_available():
+            targets = targets.cuda()
+
+        distance, deltaphi = calc_distance(anchors[0, :, :],
+                                           anots[:, :NUM_VARIABLES])
+        distance_min, distance_argmin = torch.min(
+            distance, dim=1)  # num_anchors x 1
+        deltaphi_min, deltaphi_argmin = torch.min(
+            deltaphi, dim=1)  # num_anchors x 1
+
+        targets[torch.ge(
+            distance_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+        targets[torch.ge(
+            deltaphi_min, 2 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
+
+        positive_indices = torch.logical_and(
+            torch.le(distance_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
+            torch.le(deltaphi_min, MAX_ANOT_ANCHOR_ANGLE_DISTANCE))
+
+        num_positive_anchors = positive_indices.sum()
+
+        # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
+        assigned_annotations = center_alpha_annotation[distance_argmin, :]
+
+        targets[positive_indices, :] = 0
+        targets[positive_indices,
+                assigned_annotations[positive_indices, 3].long()] = 1
+        print(targets)
+        for anot in anots:
+            x, y, alpha = anot[0], anot[1], 90 - anot[2]
+            image = draw_line(
+                image, (x, y), alpha,
+                line_color=(0, 0, 0),
+                center_color=(255, 0, 0),
+                half_line=True
+            )
+
+        image_name = os.path.basename(dataset.image_names[i])
+        cv.imwrite(os.path.join(parser.save_dir, image_name),
+                   cv.cvtColor(image, cv.COLOR_RGB2BGR))
 
 
 if __name__ == '__main__':
