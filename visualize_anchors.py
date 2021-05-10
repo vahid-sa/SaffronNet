@@ -13,7 +13,7 @@ import cv2
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import datasets, models, transforms
-
+import matplotlib.pyplot as plt
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     UnNormalizer, Normalizer
 
@@ -44,13 +44,15 @@ def main(args=None):
     parser = parser.parse_args(args)
 
     if parser.dataset == 'csv':
-        dataset = CSVDataset(train_file=parser.csv_anots, class_list=parser.csv_classes, images_dir=parser.images_dir
+        dataset = CSVDataset(train_file=parser.csv_anots, class_list=parser.csv_classes, images_dir=parser.images_dir,
                              transform=transforms.Compose([Normalizer(), Resizer()]))
     else:
         raise ValueError(
             'Dataset type not understood (must be csv or coco), exiting.')
 
     print(len(dataset))
+    plt.imshow(dataset.load_image(0))
+    plt.show()
 
 
 if __name__ == '__main__':
