@@ -51,7 +51,8 @@ def main(args=None):
             'Dataset type not understood (must be csv or coco), exiting.')
 
     print(len(dataset))
-    plt.imshow(dataset.load_image(0))
+    print(dataset.load_image(0))
+    plt.imshow(dataset.load_image(0).imag)
     plt.show()
 
 
