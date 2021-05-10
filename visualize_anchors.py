@@ -75,10 +75,10 @@ def main(args=None):
             distance, dim=1)  # num_anchors x 1
 
         targets[torch.ge(
-            distance_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+            distance_min, 12 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
         positive_indices = torch.le(
-            distance_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE)
+            distance_min, 10 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
 
         num_positive_anchors = positive_indices.sum()
 
