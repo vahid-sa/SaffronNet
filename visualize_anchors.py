@@ -53,8 +53,9 @@ def main(args=None):
 
     print(len(dataset))
     image = dataset.load_image(0)
+    image = (image * 255).astype(np.int32)
     print(image)
-    plt.imshow((image * 255).astype(np.int32))
+    plt.imshow(image)
     plt.show()
 
 
