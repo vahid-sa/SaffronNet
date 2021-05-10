@@ -16,6 +16,7 @@ import skimage.io
 import skimage.transform
 import skimage.color
 import skimage
+import cv2 as cv
 
 from PIL import Image
 from .settings import NUM_VARIABLES
@@ -221,12 +222,22 @@ class CSVDataset(Dataset):
         return sample
 
     def load_image(self, image_index):
-        img = skimage.io.imread(self.image_names[image_index])
+        img = cv.imread(self.image_names[image_index])
 
         if len(img.shape) == 2:
-            img = skimage.color.gray2rgb(img)
+            img = cv.cvtColor(img, cv.COLOR_GRAY2RGB)
+        else:
+            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
 
         return img.astype(np.float32)/255.0
+
+# def load_image(self, image_index):
+#         img = skimage.io.imread(self.image_names[image_index])
+
+#         if len(img.shape) == 2:
+#             img = skimage.color.gray2rgb(img)
+
+#         return img.astype(np.float32)/255.0
 
     def load_annotations(self, image_index):
         # get ground truth annotations

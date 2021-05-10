@@ -52,9 +52,10 @@ def main(args=None):
             'Dataset type not understood (must be csv or coco), exiting.')
 
     print(len(dataset))
-    print(dataset.load_image(0))
-    viewer = skimage.viewer.ImageViewer(dataset.load_image(0) * 255)
-    viewer.show()
+    print(image)
+    image = dataset.load_image(0)
+    plt.imshow((image * 255).astype(np.int32))
+    plt.show()
 
 
 if __name__ == '__main__':
