@@ -75,10 +75,10 @@ def main(args=None):
             distance, dim=1)  # num_anchors x 1
 
         targets[torch.ge(
-            distance_min, 12 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+            distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
         positive_indices = torch.le(
-            distance_min, 10 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
+            distance_min, 11 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
 
         num_positive_anchors = positive_indices.sum()
 
@@ -106,7 +106,9 @@ def main(args=None):
                 line_color=(255, 255, 0),
                 center_color=(0, 0, 255),
                 half_line=True,
-                distance_thresh=60
+                distance_thresh=40,
+                line_thickness=2
+
             )
         for anot in anots:
             x, y, alpha = anot[0], anot[1], 90 - anot[2]
