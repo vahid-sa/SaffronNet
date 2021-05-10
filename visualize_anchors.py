@@ -88,7 +88,7 @@ def main(args=None):
         num_positive_anchors = positive_indices.sum()
 
         # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
-        assigned_annotations = center_alpha_annotation[distance_argmin, :]
+        assigned_annotations = anots[distance_argmin, :]
 
         targets[positive_indices, :] = 0
         targets[positive_indices,
