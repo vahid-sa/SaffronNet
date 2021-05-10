@@ -92,7 +92,7 @@ def main(args=None):
 
         targets[positive_indices, :] = 0
         targets[positive_indices,
-                assigned_annotations[positive_indices, 3].long()] = 1
+                assigned_annotations[positive_indices, 3]] = 1
 
         for anchor in anchors[targets.squeeze() == 1]:
             x, y, alpha = anchors[0], anchors[1], anchors[2]
