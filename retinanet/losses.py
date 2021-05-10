@@ -110,7 +110,7 @@ class FocalLoss(nn.Module):
 
             # num_anchors x num_annotations
             distance = calc_distance(anchors[0, :, :],
-                                               center_alpha_annotation[:, :NUM_VARIABLES])
+                                     center_alpha_annotation[:, :NUM_VARIABLES])
             distance_min, distance_argmin = torch.min(
                 distance, dim=1)  # num_anchors x 1
 
@@ -120,12 +120,12 @@ class FocalLoss(nn.Module):
                 targets = targets.cuda()
 # -----------------------------------------------------------------------
 
-           targets[torch.ge(
+            targets[torch.ge(
                 distance_min, 12 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
             positive_indices = torch.le(
                 distance_min, 10 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
-            
+
             num_positive_anchors = positive_indices.sum()
 
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
