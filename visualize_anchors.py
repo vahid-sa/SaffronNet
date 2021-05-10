@@ -96,7 +96,7 @@ def main(args=None):
 
         anchors = anchors[0, :, :]
         for anchor in anchors[targets.squeeze() == 1]:
-            x, y, alpha = anchors[0], anchors[1], anchors[2]
+            x, y, alpha = anchor[0], anchor[1], anchor[2]
             image = draw_line(
                 image, (x, y), alpha,
                 line_color=(0, 255, 0),
