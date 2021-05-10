@@ -1,5 +1,7 @@
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     UnNormalizer, Normalizer
+
+from utils import write_angle, draw_line
 import matplotlib.pyplot as plt
 from torchvision import datasets, models, transforms
 from torch.utils.data import Dataset, DataLoader
@@ -41,6 +43,10 @@ def main(args=None):
         '--images_dir', help='images base folder'
     )
 
+    parser.add_argument(
+        '--save_dir', help='output directory for generated images'
+    )
+
     parser = parser.parse_args(args)
 
     if parser.dataset == 'csv':
@@ -50,9 +56,19 @@ def main(args=None):
         raise ValueError(
             'Dataset type not understood (must be csv or coco), exiting.')
 
-    image = dataset.load_image(0)
-    image = (image * 255).astype(np.int32)
-    cv.imwrite('/content/tmp.jpg', image)
+    for i in range(len(dataset)):
+        image = dataset.load_image(i)
+        anots = dataset.load_annotations(i)
+        for anot in anots:
+            x, y, alpha = anot[0], anot[1], anot[2]
+            image = draw_line(
+                image, (x, y), alpha,
+                line_color=(0, 0, 0),
+                center_color=(0, 0, 0)
+            )
+
+        image_name = os.path.basename(dataset.image_names[i])
+        cv.imwrite(os.path.join(parser.save_dir, image_name.format(i)))
 
 
 if __name__ == '__main__':
