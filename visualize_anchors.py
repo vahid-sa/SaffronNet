@@ -68,11 +68,9 @@ def main(args=None):
         anots = dataset.load_annotations(i)
 
         targets = torch.ones((anchors.shape[1], 1)) * -1
-        if torch.cuda.is_available():
-            targets = targets.cuda()
 
-        distance, deltaphi = calc_distance(anchors[0, :, :],
-                                           anots[:, :NUM_VARIABLES])
+        distance, deltaphi = calc_distance(torch.tensor(anchors[0, :, :]),
+                                           torch.tensor(anots[:, :NUM_VARIABLES]))
         distance_min, distance_argmin = torch.min(
             distance, dim=1)  # num_anchors x 1
         deltaphi_min, deltaphi_argmin = torch.min(
