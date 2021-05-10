@@ -1,6 +1,6 @@
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     UnNormalizer, Normalizer
-
+from retinanet.losses import calc_distance
 from retinanet.anchors import Anchors
 from utils.visutils import write_angle, draw_line
 import matplotlib.pyplot as plt
