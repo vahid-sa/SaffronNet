@@ -68,7 +68,7 @@ def main(args=None):
             )
 
         image_name = os.path.basename(dataset.image_names[i])
-        cv.imwrite(os.path.join(parser.save_dir, image_name.format(i)))
+        cv.imwrite(os.path.join(parser.save_dir, image_name), image)
 
 
 if __name__ == '__main__':
