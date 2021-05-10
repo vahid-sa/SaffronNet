@@ -94,6 +94,7 @@ def main(args=None):
         targets[positive_indices,
                 assigned_annotations[positive_indices, 3]] = 1
 
+        anchors = anchors[0, :, :]
         for anchor in anchors[targets.squeeze() == 1]:
             x, y, alpha = anchors[0], anchors[1], anchors[2]
             image = draw_line(
