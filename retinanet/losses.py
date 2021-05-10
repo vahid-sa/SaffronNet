@@ -121,8 +121,6 @@ class FocalLoss(nn.Module):
 
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
-            print(targets.shape)
-            print(targets)
             if torch.cuda.is_available():
                 targets = targets.cuda()
 # -----------------------------------------------------------------------
