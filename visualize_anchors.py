@@ -75,7 +75,7 @@ def main(args=None):
             distance, dim=1)  # num_anchors x 1
         deltaphi_min, deltaphi_argmin = torch.min(
             deltaphi, dim=1)  # num_anchors x 1
-        print('deltaphi_min: ', deltaphi_min)
+        print('deltaphi_min: ', deltaphi_min.max())
         targets[torch.ge(
             distance_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
         targets[torch.ge(
