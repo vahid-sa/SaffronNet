@@ -57,7 +57,7 @@ def main(args=None):
             'Dataset type not understood (must be csv or coco), exiting.')
 
     for i in range(len(dataset)):
-        image = dataset.load_image(i)
+        image = (dataset.load_image(i) * 255).astype(np.int32)
         anots = dataset.load_annotations(i)
         for anot in anots:
             x, y, alpha = anot[0], anot[1], anot[2]
