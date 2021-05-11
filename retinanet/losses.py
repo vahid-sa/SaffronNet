@@ -121,10 +121,10 @@ class FocalLoss(nn.Module):
 # -----------------------------------------------------------------------
 
             targets[torch.ge(
-                distance_min, 12 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+                distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
             positive_indices = torch.le(
-                distance_min, 10 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
+                distance_min, 11 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
 
             num_positive_anchors = positive_indices.sum()
 

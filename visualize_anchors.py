@@ -67,13 +67,12 @@ def main(args=None):
         image = (dataset.load_image(i) * 255).astype(np.int32)
         anots = dataset.load_annotations(i)
 
-        targets = torch.ones((anchors.shape[1], 1)) * -1
-
         distance = calc_distance(torch.tensor(anchors[0, :, :]),
                                  torch.tensor(anots[:, :NUM_VARIABLES]))
         distance_min, distance_argmin = torch.min(
             distance, dim=1)  # num_anchors x 1
 
+        targets = torch.ones((anchors.shape[1], 1)) * -1
         targets[torch.ge(
             distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
