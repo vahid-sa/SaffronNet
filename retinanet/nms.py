@@ -1,5 +1,5 @@
 import numpy as np
-from losses import __prepare
+from .losses import __prepare
 
 
 def nms(predictions, scores, min_score):
