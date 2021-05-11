@@ -99,6 +99,14 @@ def main(args=None):
                 half_line=True,
                 distance_thresh=60
             )
+        for anot in anots:
+            x, y, alpha = anot[0], anot[1], 90 - anot[2]
+            image = draw_line(
+                image, (x, y), alpha,
+                line_color=(0, 0, 0),
+                center_color=(255, 0, 0),
+                half_line=True
+            )
         for anchor in _anchors[targets.squeeze() == -1]:
             x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
             image = draw_line(
@@ -109,14 +117,6 @@ def main(args=None):
                 distance_thresh=40,
                 line_thickness=2
 
-            )
-        for anot in anots:
-            x, y, alpha = anot[0], anot[1], 90 - anot[2]
-            image = draw_line(
-                image, (x, y), alpha,
-                line_color=(0, 0, 0),
-                center_color=(255, 0, 0),
-                half_line=True
             )
         image_name = os.path.basename(dataset.image_names[i])
         cv.imwrite(os.path.join(parser.save_dir, image_name),
