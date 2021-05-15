@@ -5,6 +5,8 @@ import os
 import csv
 import cv2
 import argparse
+import json
+# from retinanet.nms import nms
 
 
 def load_classes(csv_reader):
@@ -43,7 +45,7 @@ def draw_caption(image, box, caption):
     cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
 
 
-def detect_image(image_path, model_path, class_list):
+def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
 
     with open(class_list, 'r') as f:
         classes = load_classes(csv.reader(f, delimiter=','))
@@ -60,9 +62,9 @@ def detect_image(image_path, model_path, class_list):
     model.training = False
     model.eval()
 
-    for img_name in os.listdir(image_path):
+    for img_name in filenames:
 
-        image = cv2.imread(os.path.join(image_path, img_name))
+        image = cv2.imread(os.path.join(image_dir, img_name+ext))
         if image is None:
             continue
         image_orig = image.copy()
@@ -113,8 +115,14 @@ if __name__ == '__main__':
 
     parser.add_argument('--image_dir', help='Path to directory containing images')
     parser.add_argument('--model_path', help='Path to model')
+    parser.add_argument("--path_mod", help="supervised | unsupervised | validation | test")
     parser.add_argument('--class_list', help='Path to CSV file listing class names (see README)')
 
     parser = parser.parse_args()
 
-    detect_image(parser.image_dir, parser.model_path, parser.class_list)
+    with open("annotations/filenames.json", "r") as fileIO:
+        str_names = fileIO.read()
+    names = json.loads(str_names)
+    assert parser.path_mod in "supervised | unsupervised | validation | test"
+
+    detect_image(parser.image_dir, names[parser.path_mod], parser.model_path, parser.class_list)
