@@ -8,7 +8,7 @@ import torch
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, NUM_VARIABLES
 
 
-def __prepare(a, b):
+def prepare(a, b):
     # extend as cols
     repetitions = b.shape[0]
     at = np.transpose([a] * repetitions)
@@ -18,7 +18,7 @@ def __prepare(a, b):
     return at, bt
 
 
-def __distance(ax, bx):
+def distance(ax, bx):
     """ 
     ax: (N) ndarray of float
     bx: (K) ndarray of float
@@ -26,7 +26,7 @@ def __distance(ax, bx):
     -------
     (N, K) ndarray of distance between all x in ax, bx
     """
-    ax, bx = __prepare(ax, bx)
+    ax, bx = prepare(ax, bx)
     return np.abs(ax - bx)
 
 
@@ -49,9 +49,9 @@ def compute_distance(a, b):
     aa = a[:, 2]
     ba = b[:, 2]
 
-    dalpha = __distance(ax=aa, bx=ba)
-    dx = __distance(ax=ax, bx=bx)
-    dy = __distance(ax=ay, bx=by)
+    dalpha = distance(ax=aa, bx=ba)
+    dx = distance(ax=ax, bx=bx)
+    dy = distance(ax=ay, bx=by)
     dxy = np.sqrt(dx*dx + dy*dy)
 
     return dxy, dalpha

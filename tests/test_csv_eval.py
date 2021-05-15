@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from retinanet.csv_eval import compute_distance, __prepare as prepare
+from retinanet.csv_eval import compute_distance, prepare
 
 
 class TestCSVEval(unittest.TestCase):
