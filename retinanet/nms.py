@@ -24,17 +24,21 @@ def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DI
 
     I = t.diag(t.ones(predictions.shape[0]) * -1) + 1
     I = I.bool()
+    if t.cuda.is_available():
+        I = I.cuda()
     all_adj_indices = all_adj_indices * I  # to filter diag
     for i in range(all_adj_indices.shape[0]):
         adj_indices = all_adj_indices[i, :]
-        arg_adj_indices = t.argsort(adj_indices, descending=True)
-        # arg_adj_indices = [True, ..., True, False, ..., False]
-        adj_args = arg_adj_indices[:arg_adj_indices.sum()]  # only Trues
+        # arg_adj_indices = t.argsort(adj_indices, descending=True)
+        # # arg_adj_indices = [True, ..., True, False, ..., False]
+        # adj_args = arg_adj_indices[:arg_adj_indices.sum()]  # only Trues
+        adj_args = adj_indices.nonzero(as_tuple=True)[0]
 
         candidate_scores = scores[adj_args]
+        if candidate_scores.nelement() == 0:
+            continue
         max_score_arg = adj_args[t.argmax(candidate_scores)]
 
         best_prediction_arg = max_score_arg
         arg_bests.add(best_prediction_arg.tolist())  # from tensor to int
-
-    return t.Tensor(list(arg_bests))
+    return t.Tensor(list(arg_bests)).long()
