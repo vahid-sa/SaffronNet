@@ -29,10 +29,9 @@ def draw_line(img, bbox):
     half_length = 10
     x, y, alpha = bbox
     rows, cols, ch = img.shape
-    xx, yy = int(round(half_length * np.cos(alpha))), int(round(half_length * np.sin(alpha)))
-    start_point = max(x - xx, 0), max(y - yy, 0)
-    end_point = min(x + xx, cols - 1), min(y + yy, rows - 1)
-    print(start_point, end_point)
+    xx, yy = half_length * np.cos(alpha), half_length * np.sin(alpha)
+    start_point = int(round(max(x - xx, 0))), int(round(max(y - yy, 0)))
+    end_point = int(round(min(x + xx, cols - 1))), int(round(min(y + yy, rows - 1)))
     cv2.line(img=img, pt1=start_point, pt2=end_point, color=(0, 0, 255), thickness=3)
 
 
@@ -87,29 +86,25 @@ def detect_image(image_path, model_path, class_list):
 
             st = time.time()
 
-            print(image.shape)
             scores, classification, transformed_anchors = model(image.cuda().float())
             print('Elapsed time: {}'.format(time.time() - st))
-            idxs = np.where(scores.cpu() > 0.5)
-
+            idxs = np.where(scores.cpu() > 0.95)
+            transformed_anchors = transformed_anchors.cpu().detach().numpy()
             for j in range(idxs[0].shape[0]):
                 bbox = transformed_anchors[idxs[0][j], :]
-
                 x, y, alpha = int(bbox[0]), int(bbox[1]), int(bbox[2])
                 label_name = labels[int(classification[idxs[0][j]])]
-                print(bbox, classification.shape)
                 score = scores[j]
                 caption = '{} {:.3f}'.format(label_name, score)
                 # draw_caption(img, (x1, y1, x2, y2), label_name)
-                draw_caption(image_orig, (x, y, alpha), caption)
+                # draw_caption(image_orig, (x, y, alpha), caption)
                 # cv2.rectangle(image_orig, (x1, y1), (x2, y2), color=(0, 0, 255), thickness=2)
-                cv2.circle(image, (x, y), 5, color=(0, 0, 255), thickness=-1)
-                draw_line(img=image, bbox=bbox)
+                cv2.circle(image_orig, (x, y), 2, color=(0, 0, 255), thickness=-1)
+                # draw_line(img=image_orig, bbox=bbox)
 
-            cv2.imshow('detections', image_orig)
-            cv2.waitKey(0)
-
-
+            cv2.imwrite("/mnt/2tra/saeedi/Projects/temp/images/{0}.jpg".format(img_name), image_orig)
+            # cv2.imshow('detections', image_orig)
+            # cv2.waitKey(0)
 
 
 if __name__ == '__main__':
