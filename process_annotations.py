@@ -83,20 +83,43 @@ def save_csv(path, object):
     fileIO.close()
 
 
-root_dir = "/mnt/2tra/saeedi/Saffron/Train"
-file_path_pattern = osp.join(root_dir, "*.csv")
-file_paths = glob.glob(file_path_pattern)
-annots = read_all_file_annotations(file_paths)
+# root_dir = "/mnt/2tra/saeedi/Saffron/Train"
+# file_path_pattern = osp.join(root_dir, "*.csv")
+# file_paths = glob.glob(file_path_pattern)
+# annots = read_all_file_annotations(file_paths)
+#
+# supervised, unsupervised, val, test = split_train_validation_test(
+#     supervised_train_coef=0.2,
+#     unsupervised_train_coef=0.6,
+#     validation_coef=0.1,
+#     test_coef=0.1,
+#     annots=annots)
+# if not osp.isdir("./annotations"):
+#     os.mkdir("./annotations")
+# save_csv(path="./annotations/supervised.csv", object=supervised)
+# save_csv(path="./annotations/unsupervised.csv", object=unsupervised)
+# save_csv(path="./annotations/validation.csv", object=val)
+# save_csv(path="./annotations/test.csv", object=test)
 
-supervised, unsupervised, val, test = split_train_validation_test(
-    supervised_train_coef=0.2,
-    unsupervised_train_coef=0.6,
-    validation_coef=0.1,
-    test_coef=0.1,
-    annots=annots)
-if not osp.isdir("./annotations"):
-    os.mkdir("./annotations")
-save_csv(path="./annotations/supervised.csv", object=supervised)
-save_csv(path="./annotations/unsupervised.csv", object=unsupervised)
-save_csv(path="./annotations/validation.csv", object=val)
-save_csv(path="./annotations/test.csv", object=test)
+import pandas
+import json
+
+def get_file_names(file_path):
+    names = list()
+    fileIO = open(file_path, "r", newline="\n")
+    reader = csv.reader(fileIO, delimiter=',')
+    # file_id = int(osp.splitext(osp.basename(file_path))[0])
+    for row in reader:
+        names.append(row[0])
+    fileIO.close()
+    return names
+
+names = {
+    "supervised": get_file_names(file_path="./annotations/supervised.csv"),
+    "unsupervised": get_file_names(file_path="./annotations/unsupervised.csv"),
+    "validation": get_file_names(file_path="./annotations/validation.csv"),
+    "test": get_file_names(file_path="./annotations/test.csv"),
+}
+str_names = json.dumps(names, indent=4)
+with open("annotations/filenames.json", "w") as fileIO:
+    fileIO.write(str_names)
