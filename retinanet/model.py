@@ -288,8 +288,8 @@ class ResNet(nn.Module):
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
-                # anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
-                anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
+                anchors_nms_idx = nms(anchorBoxes[:1000], scores[:1000], 0.5)
+                # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
 
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
