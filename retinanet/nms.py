@@ -1,22 +1,40 @@
 import numpy as np
-from .losses import __prepare
+from torch._C import dtype
+from .losses import prepare, distance
+import torch as t
+from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
-def nms(predictions, scores, min_score):
+def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DISTANCE, max_Dalpha=MAX_ANOT_ANCHOR_ANGLE_DISTANCE):
     """ Apply nms over predictions
         inputs: 
-            predictions: torch.Tensor
-            scores: torch.Tensor
+            predictions: torch.Tensor (num_anchors, 3)
+            scores: torch.Tensor (num_anchors)
             min_scores: int
         return:
             anchors_nms_idx: np.ndarray
     """
-    print(predictions.type)
-    print(scores.type)
-    # r_score, c_score1 = __prepare(scores)
-    # scores = r_score - c_score1
+    arg_bests = set()
+    x = predictions[:, 0]
+    y = predictions[:, 1]
+    dx = distance(ax=x, bx=x)
+    dy = distance(ax=y, bx=y)
+    dxy = t.sqrt(dx*dx + dy*dy)
+    all_adj_indices = dxy < max_distance
 
-    # best = []
+    I = t.diag(t.ones(predictions.shape[0]) * -1) + 1
+    I = I.bool()
+    all_adj_indices = all_adj_indices * I  # to filter diag
+    for i in range(all_adj_indices.shape[0]):
+        adj_indices = all_adj_indices[i, :]
+        arg_adj_indices = t.argsort(adj_indices, descending=True)
+        # arg_adj_indices = [True, ..., True, False, ..., False]
+        adj_args = arg_adj_indices[:arg_adj_indices.sum()]  # only Trues
 
-    # valid_scores_indices = scores > min_score
-    # for i in range(predictions.shape[0]):
+        candidate_scores = scores[adj_args]
+        max_score_arg = adj_args[t.argmax(candidate_scores)]
+
+        best_prediction_arg = max_score_arg
+        arg_bests.add(best_prediction_arg.tolist())  # from tensor to int
+
+    return t.Tensor(list(arg_bests))
