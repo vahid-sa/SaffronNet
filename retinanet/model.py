@@ -1,11 +1,16 @@
+from torch._C import T
 import torch.nn as nn
 import torch
 import math
+import numpy as np
+import cv2 as cv
+import os
 import torch.utils.model_zoo as model_zoo
 from retinanet.nms import nms
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from retinanet.anchors import Anchors
 from retinanet import losses
+from utils.visutils import draw_line
 from .settings import NUM_VARIABLES, ANGLE_SPLIT
 
 model_urls = {
@@ -186,7 +191,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-
+        self.img_number = 0
         self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
             512, num_classes=num_classes)
@@ -240,8 +245,21 @@ class ResNet(nn.Module):
             if isinstance(layer, nn.BatchNorm2d):
                 layer.eval()
 
-    def forward(self, inputs):
+    def save_img_with_predictions(self, img: np.ndarray, predictions: np.ndarray):
+        path = '/content/drive/MyDrive/Dataset/TrainDebugOutput'
+        for i in range(predictions.shape[0]):
+            x, y, alpha = predictions[i, :]
+            img = draw_line(
+                image=img,
+                p=(x, y),
+                alpha=alpha,
+                line_color=(0, 255, 255),
+                center_color=(0, 0, 0),
+                line_thickness=2,
+                half_line=True)
+        cv.imwrite(os.path.join(path, "{}.jpg".format(self.img_number)))
 
+    def forward(self, inputs):
         if self.training:
             img_batch, annotations = inputs
         else:
@@ -264,6 +282,7 @@ class ResNet(nn.Module):
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
         else:
+            self.img_number += 1
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(
                 transformed_anchors, img_batch)
@@ -303,6 +322,12 @@ class ResNet(nn.Module):
                     anchors_nms_idx = torch.cat(
                         (anchors_nms_idx, tmp_anchors_nms_idx))
 
+                self.save_img_with_predictions(
+                    img=(img_batch[0, :, :, :].data['img'].permute(
+                        1, 2, 0)).cpu().detach().numpy(),
+                    predictions=anchorBoxes[anchors_nms_idx].cpu(
+                    ).detach().numpy()
+                )
                 # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
