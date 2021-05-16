@@ -5,7 +5,7 @@ import torch as t
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
-def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DISTANCE, max_Dalpha=MAX_ANOT_ANCHOR_ANGLE_DISTANCE):
+def nms(predictions, scores, min_score, max_distance=20):
     """ Apply nms over predictions
         inputs: 
             predictions: torch.Tensor (num_anchors, 3)
@@ -29,9 +29,6 @@ def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DI
     all_adj_indices = all_adj_indices * I  # to filter diag
     for i in range(all_adj_indices.shape[0]):
         adj_indices = all_adj_indices[i, :]
-        # arg_adj_indices = t.argsort(adj_indices, descending=True)
-        # # arg_adj_indices = [True, ..., True, False, ..., False]
-        # adj_args = arg_adj_indices[:arg_adj_indices.sum()]  # only Trues
         adj_args = adj_indices.nonzero(as_tuple=True)[0]
 
         candidate_scores = scores[adj_args]
