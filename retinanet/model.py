@@ -294,7 +294,7 @@ class ResNet(nn.Module):
                 print('anchorBoxes.shape: ', anchorBoxes.shape)
 
                 count = scores.shape[0]
-                anchors_nms_idx = torch.Tensor([])
+                anchors_nms_idx = torch.Tensor([]).long()
                 for i in range(3):
                     tmp_anchors_nms_idx = nms(
                         anchorBoxes[(count // 3)*i:(count // 3)*i+1],
