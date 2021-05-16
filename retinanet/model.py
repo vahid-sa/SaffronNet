@@ -256,7 +256,7 @@ class ResNet(nn.Module):
                 center_color=(0, 0, 0),
                 line_thickness=2,
                 half_line=True)
-        cv.imwrite(os.path.join(path, "{}.jpg".format(self.img_number)))
+        cv.imwrite(os.path.join(path, "{}.jpg".format(self.img_number)), img)
 
     def forward(self, inputs):
         if self.training:
