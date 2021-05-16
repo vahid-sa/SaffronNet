@@ -290,24 +290,32 @@ class ResNet(nn.Module):
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
-                anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
-                # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
+                print('scores.shape: ', scores.shape)
+                print('anchorBoxes.shape: ', anchorBoxes.shape)
 
-                finalResult[0].extend(scores[anchors_nms_idx])
-                finalResult[1].extend(torch.tensor(
-                    [i] * anchors_nms_idx.shape[0]))
-                finalResult[2].extend(anchorBoxes[anchors_nms_idx])
+                count = scores.shape[0]
+                for i in range(3):
+                    anchors_nms_idx = nms(
+                        anchorBoxes[(count // 3)*i:(count // 3)*i+1],
+                        scores[(count // 3)*i:(count // 3)*i+1],
+                        0.5)
+                    # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
+                    finalResult[0].extend(scores[anchors_nms_idx])
+                    finalResult[1].extend(torch.tensor(
+                        [i] * anchors_nms_idx.shape[0]))
+                    finalResult[2].extend(anchorBoxes[anchors_nms_idx])
 
-                finalScores = torch.cat((finalScores, scores[anchors_nms_idx]))
-                finalAnchorBoxesIndexesValue = torch.tensor(
-                    [i] * anchors_nms_idx.shape[0])
-                if torch.cuda.is_available():
-                    finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
+                    finalScores = torch.cat(
+                        (finalScores, scores[anchors_nms_idx]))
+                    finalAnchorBoxesIndexesValue = torch.tensor(
+                        [i] * anchors_nms_idx.shape[0])
+                    if torch.cuda.is_available():
+                        finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
 
-                finalAnchorBoxesIndexes = torch.cat(
-                    (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
-                finalAnchorBoxesCoordinates = torch.cat(
-                    (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+                    finalAnchorBoxesIndexes = torch.cat(
+                        (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
+                    finalAnchorBoxesCoordinates = torch.cat(
+                        (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
 
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
