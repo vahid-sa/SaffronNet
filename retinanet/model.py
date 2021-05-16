@@ -309,19 +309,20 @@ class ResNet(nn.Module):
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
-                # count = scores.shape[0]
-                # anchors_nms_idx = torch.Tensor([]).long()
-                # for i in range(3):
-                #     tmp_anchors_nms_idx = nms(
-                #         anchorBoxes[(count // 3)*i:(count // 3)*i+1],
-                #         scores[(count // 3)*i:(count // 3)*i+1],
-                #         0.5)
-                #     print('tmp_anchors_nms_idx.shape: ',
-                #           tmp_anchors_nms_idx.shape)
-                #     anchors_nms_idx = torch.cat(
-                #         (anchors_nms_idx, tmp_anchors_nms_idx))
+                count = scores.shape[0]
 
-                anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
+                anchors_nms_idx = torch.Tensor([]).long()
+                for i in range(3):
+                    tmp_anchors_nms_idx = nms(
+                        anchorBoxes[(count // 3)*i:(count // 3)*i+1],
+                        scores[(count // 3)*i:(count // 3)*i+1],
+                        0.5)
+                    print('tmp_anchors_nms_idx.shape: ',
+                          tmp_anchors_nms_idx.shape)
+                    anchors_nms_idx = torch.cat(
+                        (anchors_nms_idx, tmp_anchors_nms_idx))
+
+                # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
                 self.save_img_with_predictions(
                     img=(img_batch[0, :, :, :].permute(
