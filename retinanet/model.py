@@ -1,4 +1,3 @@
-from torch._C import T
 import torch.nn as nn
 import torch
 import math
