@@ -246,6 +246,8 @@ class ResNet(nn.Module):
 
     def save_img_with_predictions(self, img: np.ndarray, predictions: np.ndarray):
         path = '/content/drive/MyDrive/Dataset/TrainDebugOutput'
+        print('img.shape: ', img.shape)
+        print('predictions.shape: ', predictions.shape)
         for i in range(predictions.shape[0]):
             x, y, alpha = predictions[i, :]
             img = draw_line(
@@ -253,7 +255,7 @@ class ResNet(nn.Module):
                 p=(x, y),
                 alpha=alpha,
                 line_color=(0, 255, 255),
-                center_color=(0, 0, 0),
+                center_color=(255, 0, 0),
                 line_thickness=2,
                 half_line=True)
         cv.imwrite(os.path.join(path, "{}.jpg".format(self.img_number)), img)
@@ -297,8 +299,6 @@ class ResNet(nn.Module):
                 finalAnchorBoxesCoordinates = finalAnchorBoxesCoordinates.cuda()
 
             for i in range(classification.shape[2]):
-                print('classification.shape[2]: ', classification.shape[2])
-                print('img_batch.shape: ', img_batch.shape)
                 scores = torch.squeeze(classification[:, :, i])
                 scores_over_thresh = (scores > 0.05)
                 if scores_over_thresh.sum() == 0:
@@ -308,9 +308,6 @@ class ResNet(nn.Module):
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
-                print('scores.shape: ', scores.shape)
-                print('anchorBoxes.shape: ', anchorBoxes.shape)
-
                 count = scores.shape[0]
                 anchors_nms_idx = torch.Tensor([]).long()
                 for i in range(3):
