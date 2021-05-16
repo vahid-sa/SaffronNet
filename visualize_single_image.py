@@ -94,7 +94,7 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
                     center_color=(255, 0, 0),
                     half_line=True)
             cv2.imwrite(
-                os.path.join(output_dir, "{0}.jpg".format(img_name), image_orig))
+                os.path.join(output_dir, "{0}.jpg".format(img_name)), image_orig)
 
 
 if __name__ == '__main__':
@@ -120,9 +120,9 @@ if __name__ == '__main__':
     assert parser.path_mod in "supervised | unsupervised | validation | test"
 
     detect_image(
-        parser.image_dir,
-        names[parser.path_mod],
-        parser.model_path,
-        parser.class_list,
-        parser.output_dir
+        image_dir=parser.image_dir,
+        filenames=names[parser.path_mod],
+        model_path=parser.model_path,
+        class_list=parser.class_list,
+        output_dir=parser.output_dir
     )
