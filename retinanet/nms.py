@@ -14,6 +14,9 @@ def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DI
         return:
             anchors_nms_idx: np.ndarray
     """
+    valid_prediction_indices = scores > min_score
+    scores = scores[valid_prediction_indices]
+    predictions = predictions[valid_prediction_indices]
     arg_bests = set()
     x = predictions[:, 0]
     y = predictions[:, 1]
