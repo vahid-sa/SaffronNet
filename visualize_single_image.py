@@ -7,6 +7,7 @@ import cv2
 import argparse
 import json
 # from retinanet.nms import nms
+from utils.visutils import draw_line
 
 
 def load_classes(csv_reader):
@@ -18,34 +19,18 @@ def load_classes(csv_reader):
         try:
             class_name, class_id = row
         except ValueError:
-            raise(ValueError('line {}: format should be \'class_name,class_id\''.format(line)))
+            raise(ValueError(
+                'line {}: format should be \'class_name,class_id\''.format(line)))
         class_id = int(class_id)
 
         if class_name in result:
-            raise ValueError('line {}: duplicate class name: \'{}\''.format(line, class_name))
+            raise ValueError(
+                'line {}: duplicate class name: \'{}\''.format(line, class_name))
         result[class_name] = class_id
     return result
 
 
-def draw_line(img, bbox):
-    half_length = 10
-    x, y, alpha = bbox
-    rows, cols, ch = img.shape
-    xx, yy = half_length * np.cos(alpha), half_length * np.sin(alpha)
-    start_point = int(round(max(x - xx, 0))), int(round(max(y - yy, 0)))
-    end_point = int(round(min(x + xx, cols - 1))), int(round(min(y + yy, rows - 1)))
-    cv2.line(img=img, pt1=start_point, pt2=end_point, color=(0, 0, 255), thickness=3)
-
-
-
-# Draws a caption above the box in an image
-def draw_caption(image, box, caption):
-    b = np.array(box).astype(int)
-    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 2)
-    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
-
-
-def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
+def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext=".jpg"):
 
     with open(class_list, 'r') as f:
         classes = load_classes(csv.reader(f, delimiter=','))
@@ -74,7 +59,8 @@ def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
         pad_w = 32 - rows % 32
         pad_h = 32 - cols % 32
 
-        new_image = np.zeros((rows + pad_w, cols + pad_h, cns)).astype(np.float32)
+        new_image = np.zeros(
+            (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
         image = new_image.astype(np.float32)
 
@@ -88,35 +74,43 @@ def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
 
             st = time.time()
 
-            scores, classification, transformed_anchors = model(image.cuda().float())
+            scores, classification, transformed_anchors = model(
+                image.cuda().float())
             print('Elapsed time: {}'.format(time.time() - st))
             idxs = np.where(scores.cpu() > 0.95)
             transformed_anchors = transformed_anchors.cpu().detach().numpy()
             for j in range(idxs[0].shape[0]):
-                bbox = transformed_anchors[idxs[0][j], :]
-                x, y, alpha = int(bbox[0]), int(bbox[1]), int(bbox[2])
+                center_alpha = transformed_anchors[idxs[0][j], :]
+                x, y, alpha = int(center_alpha[0]), int(
+                    center_alpha[1]), int(center_alpha[2])
                 label_name = labels[int(classification[idxs[0][j]])]
                 score = scores[j]
                 caption = '{} {:.3f}'.format(label_name, score)
-                # draw_caption(img, (x1, y1, x2, y2), label_name)
-                # draw_caption(image_orig, (x, y, alpha), caption)
-                # cv2.rectangle(image_orig, (x1, y1), (x2, y2), color=(0, 0, 255), thickness=2)
-                cv2.circle(image_orig, (x, y), 2, color=(0, 0, 255), thickness=-1)
-                # draw_line(img=image_orig, bbox=bbox)
-
-            cv2.imwrite("/mnt/2tra/saeedi/Projects/temp/images/{0}.jpg".format(img_name), image_orig)
-            # cv2.imshow('detections', image_orig)
-            # cv2.waitKey(0)
+                image_orig = draw_line(
+                    image=image_orig,
+                    p=(x, y),
+                    alpha=alpha,
+                    line_color=(0, 255, 0),
+                    center_color=(255, 0, 0),
+                    half_line=True)
+            cv2.imwrite(
+                os.path.join(output_dir, "{0}.jpg".format(img_name), image_orig))
 
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Simple script for visualizing result of training.')
+    parser = argparse.ArgumentParser(
+        description='Simple script for visualizing result of training.')
 
-    parser.add_argument('--image_dir', help='Path to directory containing images')
+    parser.add_argument(
+        '--image_dir', help='Path to directory containing images')
     parser.add_argument('--model_path', help='Path to model')
-    parser.add_argument("--path_mod", help="supervised | unsupervised | validation | test")
-    parser.add_argument('--class_list', help='Path to CSV file listing class names (see README)')
+    parser.add_argument(
+        "--path_mod", help="supervised | unsupervised | validation | test")
+    parser.add_argument(
+        '--class_list', help='Path to CSV file listing class names (see README)')
+    parser.add_argument(
+        '--output_dir', help='direction for output images')
 
     parser = parser.parse_args()
 
@@ -125,4 +119,10 @@ if __name__ == '__main__':
     names = json.loads(str_names)
     assert parser.path_mod in "supervised | unsupervised | validation | test"
 
-    detect_image(parser.image_dir, names[parser.path_mod], parser.model_path, parser.class_list)
+    detect_image(
+        parser.image_dir,
+        names[parser.path_mod],
+        parser.model_path,
+        parser.class_list,
+        parser.output_dir
+    )
