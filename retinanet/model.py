@@ -258,7 +258,8 @@ class ResNet(nn.Module):
                 center_color=(255, 0, 0),
                 line_thickness=2,
                 half_line=True)
-        cv.imwrite(os.path.join(path, "{}.jpg".format(self.img_number)), img)
+        cv.imwrite(os.path.join(path, "{}.jpg".format(
+            self.img_number)), (img*255).astype(np.int32))
 
     def forward(self, inputs):
         if self.training:
@@ -315,9 +316,12 @@ class ResNet(nn.Module):
                         anchorBoxes[(count // 3)*i:(count // 3)*i+1],
                         scores[(count // 3)*i:(count // 3)*i+1],
                         0.5)
+                    print('tmp_anchors_nms_idx.shape: ',
+                          tmp_anchors_nms_idx.shape)
                     anchors_nms_idx = torch.cat(
                         (anchors_nms_idx, tmp_anchors_nms_idx))
 
+                print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
                 self.save_img_with_predictions(
                     img=(img_batch[0, :, :, :].permute(
                         1, 2, 0)).cpu().detach().numpy(),
