@@ -279,6 +279,8 @@ class ResNet(nn.Module):
                 finalAnchorBoxesCoordinates = finalAnchorBoxesCoordinates.cuda()
 
             for i in range(classification.shape[2]):
+                print('classification.shape[2]: ', classification.shape[2])
+                print('img_batch.shape: ', img_batch.shape)
                 scores = torch.squeeze(classification[:, :, i])
                 scores_over_thresh = (scores > 0.05)
                 if scores_over_thresh.sum() == 0:
