@@ -322,7 +322,7 @@ class ResNet(nn.Module):
                         (anchors_nms_idx, tmp_anchors_nms_idx))
 
                 self.save_img_with_predictions(
-                    img=(img_batch[0, :, :, :].data['img'].permute(
+                    img=(img_batch[0, :, :, :].permute(
                         1, 2, 0)).cpu().detach().numpy(),
                     predictions=anchorBoxes[anchors_nms_idx].cpu(
                     ).detach().numpy()
