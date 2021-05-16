@@ -288,8 +288,14 @@ class ResNet(nn.Module):
                 scores = scores[scores_over_thresh]
                 anchorBoxes = torch.squeeze(transformed_anchors)
                 anchorBoxes = anchorBoxes[scores_over_thresh]
-                anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
-                # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
+                # anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
+                valid_prediction_indices = scores > 0.5
+                print('valid_prediction_indices :',
+                      valid_prediction_indices.sum())
+                scores = scores[valid_prediction_indices]
+                anchorBoxes = anchorBoxes[valid_prediction_indices]
+
+                anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
 
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
