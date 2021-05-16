@@ -26,6 +26,9 @@ def nms(predictions, scores, min_score, max_distance=20):
         filter_row = D2filter[i, :]
         filter_row = filter_row.nonzero(as_tuple=True)[0]
         candidate_scores = scores[filter_row]
+        print(candidate_scores)
+        if candidate_scores.shape[0] == 0:
+            continue
         arg_max = t.argmax(candidate_scores)
         filter_row = t.cat([filter_row[:arg_max], filter_row[arg_max+1:]])
         dxy[:, filter_row] = -1
