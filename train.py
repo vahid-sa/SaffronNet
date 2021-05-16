@@ -181,17 +181,17 @@ def main(args=None):
                 print(e)
                 continue
 
-        # if parser.dataset == 'coco':
+        if parser.dataset == 'coco':
 
-        #     print('Evaluating dataset')
+            print('Evaluating dataset')
 
-        #     coco_eval.evaluate_coco(dataset_val, retinanet)
+            coco_eval.evaluate_coco(dataset_val, retinanet)
 
-        # elif parser.dataset == 'csv' and parser.csv_val is not None:
+        elif parser.dataset == 'csv' and parser.csv_val is not None:
 
-        #     print('Evaluating dataset')
+            print('Evaluating dataset')
 
-        #     mAP = csv_eval.evaluate(dataset_val, retinanet)
+            mAP = csv_eval.evaluate(dataset_val, retinanet)
 
         scheduler.step(np.mean(epoch_loss))
 
