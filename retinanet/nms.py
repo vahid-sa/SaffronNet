@@ -14,19 +14,16 @@ def nms(predictions, scores, min_score, max_distance=20):
         return:
             anchors_nms_idx: np.ndarray
     """
-    args = t.arange(0, scores.shape[0], 1)
-    arg_bests = set()
     x = predictions[:, 0]
     y = predictions[:, 1]
     dx = distance(ax=x, bx=x)
     dy = distance(ax=y, bx=y)
     dxy = t.sqrt(dx*dx + dy*dy)
     for i in range(dxy.shape[0]):
-        D2filter = 0 < dxy < max_distance
+        D2filter = t.logical_and(0 < dxy, dxy < max_distance)
         filter_row = D2filter[i, :]
         filter_row = filter_row.nonzero(as_tuple=True)[0]
         candidate_scores = scores[filter_row]
-        print(candidate_scores)
         if candidate_scores.shape[0] == 0:
             continue
         arg_max = t.argmax(candidate_scores)

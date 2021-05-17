@@ -246,8 +246,6 @@ class ResNet(nn.Module):
 
     def save_img_with_predictions(self, img: np.ndarray, predictions: np.ndarray):
         path = '/content/drive/MyDrive/Dataset/TrainDebugOutput'
-        print('img.shape: ', img.shape)
-        print('predictions.shape: ', predictions.shape)
         for i in range(predictions.shape[0]):
             x, y, alpha = predictions[i, :]
             img = draw_line(
@@ -312,13 +310,13 @@ class ResNet(nn.Module):
                 count = scores.shape[0]
 
                 anchors_nms_idx = torch.Tensor([]).long()
+                if torch.cuda.is_available():
+                    anchors_nms_idx = anchors_nms_idx.cuda()
                 for i in range(3):
                     tmp_anchors_nms_idx = nms(
-                        anchorBoxes[(count // 3)*i:(count // 3)*i+1],
-                        scores[(count // 3)*i:(count // 3)*i+1],
+                        anchorBoxes[(count // 3)*i:(count // 3)*(i+1)],
+                        scores[(count // 3)*i:(count // 3)*(i+1)],
                         0.5)
-                    print('tmp_anchors_nms_idx.shape: ',
-                          tmp_anchors_nms_idx.shape)
                     anchors_nms_idx = torch.cat(
                         (anchors_nms_idx, tmp_anchors_nms_idx))
 
