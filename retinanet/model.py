@@ -251,13 +251,13 @@ class ResNet(nn.Module):
             img = draw_line(
                 image=img,
                 p=(x, y),
-                alpha=alpha,
-                line_color=(0, 255, 255),
+                alpha=(90-alpha),
+                line_color=(0, 255, 0),
                 center_color=(255, 0, 0),
                 line_thickness=2,
                 half_line=True)
-        cv.imwrite(os.path.join(path, "{}.jpg".format(
-            self.img_number)), (img*255).astype(np.int32))
+        cv.imwrite(os.path.join(path, "{}-{}.jpg".format(
+            self.img_number, predictions.shape[0])), (img*255).astype(np.int32))
 
     def forward(self, inputs):
         if self.training:
@@ -312,12 +312,6 @@ class ResNet(nn.Module):
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
-                # for i in range(3):
-                #     tmp_anchors_nms_idx = nms(
-                #         anchorBoxes[(count // 3)*i:(count // 3)*(i+1)],
-                #         scores[(count // 3)*i:(count // 3)*(i+1)],
-                #         0.5)
-                #     anchors_nms_idx = torch.cat(
                 anchors_nms_idx = nms(
                     anchorBoxes,
                     scores,
