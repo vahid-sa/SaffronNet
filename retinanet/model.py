@@ -299,7 +299,7 @@ class ResNet(nn.Module):
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
-                scores_over_thresh = (scores > 0.05)
+                scores_over_thresh = (scores > 0.5)
                 if scores_over_thresh.sum() == 0:
                     # no boxes to NMS, just continue
                     continue
@@ -312,14 +312,16 @@ class ResNet(nn.Module):
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
-                for i in range(20):
-                    tmp_anchors_nms_idx = nms(
-                        anchorBoxes[(count // 20)*i:(count // 20)*(i+1)],
-                        scores[(count // 20)*i:(count // 20)*(i+1)],
-                        0.5)
-                    anchors_nms_idx = torch.cat(
-                        (anchors_nms_idx, tmp_anchors_nms_idx + (i * (count // 20))))
-
+                # for i in range(3):
+                #     tmp_anchors_nms_idx = nms(
+                #         anchorBoxes[(count // 3)*i:(count // 3)*(i+1)],
+                #         scores[(count // 3)*i:(count // 3)*(i+1)],
+                #         0.5)
+                #     anchors_nms_idx = torch.cat(
+                anchors_nms_idx = nms(
+                    anchorBoxes,
+                    scores,
+                    0.5)
                 # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
                 if self.img_number % 10 == 0:
