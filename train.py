@@ -2,7 +2,7 @@ import argparse
 import collections
 
 import numpy as np
-
+import os
 import torch
 import torch.optim as optim
 from torchvision import transforms
@@ -40,6 +40,7 @@ def main(args=None):
         '--ext', help='image file extention', type=str, default='.jpg')
 
     parser.add_argument('--images_dir', help='image files direction', type=str)
+    parser.add_argument('--save_dir', help='model save dir', type=str)
     parser.add_argument('--epochs', help='Number of epochs',
                         type=int, default=100)
 
@@ -198,8 +199,10 @@ def main(args=None):
             parser.dataset, epoch_num))
 
     retinanet.eval()
-
-    torch.save(retinanet, 'model_final.pt')
+    if parser.save_dir:
+        torch.save(retinanet, os.path.join(parser.save_dir, 'model_final.pt'))
+    else:
+        torch.save(retinanet, 'model_final.pt')
 
 
 if __name__ == '__main__':

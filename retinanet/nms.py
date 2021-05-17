@@ -5,7 +5,7 @@ import torch as t
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
-def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DISTANCE, max_Dalpha=MAX_ANOT_ANCHOR_ANGLE_DISTANCE):
+def nms(predictions, scores, min_score, max_distance=20):
     """ Apply nms over predictions
         inputs: 
             predictions: torch.Tensor (num_anchors, 3)
@@ -14,31 +14,19 @@ def nms(predictions, scores, min_score, max_distance=MAX_ANOT_ANCHOR_POSITION_DI
         return:
             anchors_nms_idx: np.ndarray
     """
-    arg_bests = set()
     x = predictions[:, 0]
     y = predictions[:, 1]
     dx = distance(ax=x, bx=x)
     dy = distance(ax=y, bx=y)
     dxy = t.sqrt(dx*dx + dy*dy)
-    all_adj_indices = dxy < max_distance
-
-    I = t.diag(t.ones(predictions.shape[0]) * -1) + 1
-    I = I.bool()
-    if t.cuda.is_available():
-        I = I.cuda()
-    all_adj_indices = all_adj_indices * I  # to filter diag
-    for i in range(all_adj_indices.shape[0]):
-        adj_indices = all_adj_indices[i, :]
-        # arg_adj_indices = t.argsort(adj_indices, descending=True)
-        # # arg_adj_indices = [True, ..., True, False, ..., False]
-        # adj_args = arg_adj_indices[:arg_adj_indices.sum()]  # only Trues
-        adj_args = adj_indices.nonzero(as_tuple=True)[0]
-
-        candidate_scores = scores[adj_args]
-        if candidate_scores.nelement() == 0:
+    for i in range(dxy.shape[0]):
+        filter_row = t.logical_and(0 < dxy[i, :], dxy[i, :] < max_distance)
+        filter_row = filter_row.nonzero(as_tuple=True)[0]
+        candidate_scores = scores[filter_row]
+        if candidate_scores.shape[0] == 0:
             continue
-        max_score_arg = adj_args[t.argmax(candidate_scores)]
+        arg_max = t.argmax(candidate_scores)
+        filter_row = t.cat([filter_row[:arg_max], filter_row[arg_max+1:]])
+        dxy[:, filter_row] = -1
 
-        best_prediction_arg = max_score_arg
-        arg_bests.add(best_prediction_arg.tolist())  # from tensor to int
-    return t.Tensor(list(arg_bests)).long()
+    return (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
