@@ -190,7 +190,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.img_number = 0
+        self.img_number = -1
         self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
             512, num_classes=num_classes)
@@ -312,22 +312,23 @@ class ResNet(nn.Module):
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
-                for i in range(3):
+                for i in range(20):
                     tmp_anchors_nms_idx = nms(
-                        anchorBoxes[(count // 3)*i:(count // 3)*(i+1)],
-                        scores[(count // 3)*i:(count // 3)*(i+1)],
+                        anchorBoxes[(count // 20)*i:(count // 20)*(i+1)],
+                        scores[(count // 20)*i:(count // 20)*(i+1)],
                         0.5)
                     anchors_nms_idx = torch.cat(
-                        (anchors_nms_idx, tmp_anchors_nms_idx))
+                        (anchors_nms_idx, tmp_anchors_nms_idx + (i * (count // 20))))
 
                 # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
-                self.save_img_with_predictions(
-                    img=(img_batch[0, :, :, :].permute(
-                        1, 2, 0)).cpu().detach().numpy(),
-                    predictions=anchorBoxes[anchors_nms_idx].cpu(
-                    ).detach().numpy()
-                )
+                if self.img_number % 10 == 0:
+                    self.save_img_with_predictions(
+                        img=(img_batch[0, :, :, :].permute(
+                            1, 2, 0)).cpu().detach().numpy(),
+                        predictions=anchorBoxes[anchors_nms_idx].cpu(
+                        ).detach().numpy()
+                    )
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
