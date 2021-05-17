@@ -257,7 +257,7 @@ class ResNet(nn.Module):
                 line_thickness=2,
                 half_line=True)
         cv.imwrite(os.path.join(path, "{}-{}.jpg".format(
-            self.img_number, predictions.shape[0])), (img*255).astype(np.int32))
+            self.img_number, predictions.shape[0])), cv.cvtColor(cv.COLOR_BGR2RGB, (img*255).astype(np.int32)))
 
     def forward(self, inputs):
         if self.training:
