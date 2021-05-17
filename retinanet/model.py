@@ -256,10 +256,9 @@ class ResNet(nn.Module):
                 center_color=(255, 0, 0),
                 line_thickness=2,
                 half_line=True)
-        
-        cv.imwrite(
-          os.path.join(path, "{}_{}.jpg".format(self.img_number, predictions.shape[0])), (img*255).astype(np.int32))
 
+        cv.imwrite(
+            os.path.join(path, "{}_{}.jpg".format(self.img_number, predictions.shape[0])), (img*255).astype(np.int32))
 
     def forward(self, inputs):
         if self.training:
@@ -320,13 +319,13 @@ class ResNet(nn.Module):
                     0.5)
                 # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
-                if self.img_number % 10 == 0:
-                    self.save_img_with_predictions(
-                        img=(img_batch[0, :, :, :].permute(
-                            1, 2, 0)).cpu().detach().numpy(),
-                        predictions=anchorBoxes[anchors_nms_idx].cpu(
-                        ).detach().numpy()
-                    )
+                # if self.img_number % 10 == 0:
+                #     self.save_img_with_predictions(
+                #         img=(img_batch[0, :, :, :].permute(
+                #             1, 2, 0)).cpu().detach().numpy(),
+                #         predictions=anchorBoxes[anchors_nms_idx].cpu(
+                #         ).detach().numpy()
+                #     )
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
