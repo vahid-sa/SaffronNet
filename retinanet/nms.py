@@ -20,8 +20,7 @@ def nms(predictions, scores, min_score, max_distance=20):
     dy = distance(ax=y, bx=y)
     dxy = t.sqrt(dx*dx + dy*dy)
     for i in range(dxy.shape[0]):
-        D2filter = t.logical_and(0 < dxy, dxy < max_distance)
-        filter_row = D2filter[i, :]
+        filter_row = t.logical_and(0 < dxy[i, :], dxy[i, :] < max_distance)
         filter_row = filter_row.nonzero(as_tuple=True)[0]
         candidate_scores = scores[filter_row]
         if candidate_scores.shape[0] == 0:
