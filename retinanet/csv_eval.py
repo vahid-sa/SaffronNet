@@ -5,83 +5,84 @@ import json
 import os
 import matplotlib.pyplot as plt
 import torch
+from torch.cuda.random import get_rng_state
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, NUM_VARIABLES
+import math
+
+# def prepare(a, b):
+#     # extend as cols
+#     repetitions = b.shape[0]
+#     at = np.transpose([a] * repetitions)
+#     # extend as rows
+#     repetitions = a.shape[0]
+#     bt = np.tile(b, (repetitions, 1))
+#     return at, bt
 
 
-def prepare(a, b):
-    # extend as cols
-    repetitions = b.shape[0]
-    at = np.transpose([a] * repetitions)
-    # extend as rows
-    repetitions = a.shape[0]
-    bt = np.tile(b, (repetitions, 1))
-    return at, bt
+# def distance(ax, bx):
+#     """
+#     ax: (N) ndarray of float
+#     bx: (K) ndarray of float
+#     Returns
+#     -------
+#     (N, K) ndarray of distance between all x in ax, bx
+#     """
+#     ax, bx = prepare(ax, bx)
+#     return np.abs(ax - bx)
 
 
-def distance(ax, bx):
-    """ 
-    ax: (N) ndarray of float
-    bx: (K) ndarray of float
-    Returns
-    -------
-    (N, K) ndarray of distance between all x in ax, bx
-    """
-    ax, bx = prepare(ax, bx)
-    return np.abs(ax - bx)
+# def compute_distance(a, b):
+#     """
+#     Parameters
+#     ----------
+#     a: (N, 3) ndarray of float
+#     b: (K, 3) ndarray of float
+#     Returns
+#     -------
+#     distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
+#     """
+#     ax = a[:, 0]
+#     bx = b[:, 0]
+
+#     ay = a[:, 1]
+#     by = b[:, 1]
+
+#     aa = a[:, 2]
+#     ba = b[:, 2]
+
+#     dalpha = distance(ax=aa, bx=ba)
+#     dx = distance(ax=ax, bx=bx)
+#     dy = distance(ax=ay, bx=by)
+#     dxy = np.sqrt(dx*dx + dy*dy)
+
+#     return dxy, dalpha
 
 
-def compute_distance(a, b):
-    """
-    Parameters
-    ----------
-    a: (N, 3) ndarray of float
-    b: (K, 3) ndarray of float
-    Returns
-    -------
-    distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
-    """
-    ax = a[:, 0]
-    bx = b[:, 0]
+# def _compute_ap(recall, precision):
+#     """ Compute the average precision, given the recall and precision curves.
+#     Code originally from https://github.com/rbgirshick/py-faster-rcnn.
+#     # Arguments
+#         recall:    The recall curve (list).
+#         precision: The precision curve (list).
+#     # Returns
+#         The average precision as computed in py-faster-rcnn.
+#     """
+#     # correct AP calculation
+#     # first append sentinel values at the end
+#     mrec = np.concatenate(([0.], recall, [1.]))
+#     mpre = np.concatenate(([0.], precision, [0.]))
 
-    ay = a[:, 1]
-    by = b[:, 1]
+#     # compute the precision envelope
+#     for i in range(mpre.size - 1, 0, -1):
+#         mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
 
-    aa = a[:, 2]
-    ba = b[:, 2]
+#     # to calculate area under PR curve, look for points
+#     # where X axis (recall) changes value
+#     i = np.where(mrec[1:] != mrec[:-1])[0]
 
-    dalpha = distance(ax=aa, bx=ba)
-    dx = distance(ax=ax, bx=bx)
-    dy = distance(ax=ay, bx=by)
-    dxy = np.sqrt(dx*dx + dy*dy)
-
-    return dxy, dalpha
-
-
-def _compute_ap(recall, precision):
-    """ Compute the average precision, given the recall and precision curves.
-    Code originally from https://github.com/rbgirshick/py-faster-rcnn.
-    # Arguments
-        recall:    The recall curve (list).
-        precision: The precision curve (list).
-    # Returns
-        The average precision as computed in py-faster-rcnn.
-    """
-    # correct AP calculation
-    # first append sentinel values at the end
-    mrec = np.concatenate(([0.], recall, [1.]))
-    mpre = np.concatenate(([0.], precision, [0.]))
-
-    # compute the precision envelope
-    for i in range(mpre.size - 1, 0, -1):
-        mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
-
-    # to calculate area under PR curve, look for points
-    # where X axis (recall) changes value
-    i = np.where(mrec[1:] != mrec[:-1])[0]
-
-    # and sum (\Delta recall) * prec
-    ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
-    return ap
+#     # and sum (\Delta recall) * prec
+#     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
+#     return ap
 
 
 def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
@@ -178,10 +179,50 @@ def _get_annotations(generator):
     return all_annotations
 
 
+def distance(x0, y0, x1, y1):
+    return math.sqrt((x0 - x1)**2 + (y0 - y1)**2)
+
+
+def _calculate_accuracy_for_each_prediction(anot, prediction):
+    x, y, alpha = anot
+    px, py, palpha = prediction
+    d = distance(x, y, px, py)
+    dalpha = abs(alpha - palpha)
+    if d < MAX_ANOT_ANCHOR_POSITION_DISTANCE and dalpha < MAX_ANOT_ANCHOR_ANGLE_DISTANCE:
+        return (1 - float(d)/MAX_ANOT_ANCHOR_POSITION_DISTANCE) * math.cos(dalpha * (math.pi / 180.0))
+        # return 1
+    return 0
+
+
+def calculate_metrics(anots, predictions):
+    """ calculate accuracy for each image
+      inputs: 
+        anots: (num_anchors, 3)
+        predictions: (num_anchors, 4)
+        anchors: (num_anchors, 3)
+    """
+    n, k = len(predictions), len(anots)
+    map = np.zeros((n, k))
+
+    for _n, prediction in enumerate(predictions):
+        for _k, anot in enumerate(anots):
+            map[_n, _k] = _calculate_accuracy_for_each_prediction(
+                anot, prediction)
+
+    predictions_max_score = np.amax(map, axis=1)
+    anots_max_score = np.amax(map, axis=0)
+
+    TP = np.sum(predictions_max_score > 0.001)
+    FP = np.sum(predictions_max_score < 0.001)
+    FN = np.sum(anots_max_score < 0.001)
+
+    return TP, FP, FN
+
+
 def evaluate(
     generator,
     retinanet,
-    XYd_threshold=MAX_ANOT_ANCHOR_POSITION_DISTANCE,
+    XYd_threshold=10 * MAX_ANOT_ANCHOR_POSITION_DISTANCE,
     Ad_threshold=MAX_ANOT_ANCHOR_ANGLE_DISTANCE,
     score_threshold=0.05,
     max_detections=100,
@@ -216,77 +257,8 @@ def evaluate(
         for i in range(len(generator)):
             detections = all_detections[i][label]
             annotations = all_annotations[i][label]
-            num_annotations += annotations.shape[0]
-            detected_annotations = []
-
-            for d in detections:
-                scores = np.append(scores, d[NUM_VARIABLES])
-
-                if annotations.shape[0] == 0:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives = np.append(true_positives, 0)
-                    continue
-
-                dxys, dangels = compute_distance(
-                    np.expand_dims(d, axis=0), annotations)
-
-                distances = (
-                    2 * dxys) + (dangels * (MAX_ANOT_ANCHOR_POSITION_DISTANCE / MAX_ANOT_ANCHOR_ANGLE_DISTANCE))
-                assigned_annotation = np.argmin(distances, axis=1)
-                min_dxy = dxys[0, assigned_annotation]
-                min_dangel = dangels[0, assigned_annotation]
-
-                if min_dxy <= XYd_threshold and min_dangel <= Ad_threshold and assigned_annotation not in detected_annotations:
-                    false_positives = np.append(false_positives, 0)
-                    true_positives = np.append(true_positives, 1)
-                    detected_annotations.append(assigned_annotation)
-                else:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives = np.append(true_positives, 0)
-
-        # no annotations -> AP for this class is 0 (is this correct?)
-        if num_annotations == 0:
-            average_precisions[label] = 0, 0
-            continue
-
-        # sort by score
-    #     indices = np.argsort(-scores)
-    #     false_positives = false_positives[indices]
-    #     true_positives = true_positives[indices]
-
-    #     # compute false positives and true positives
-    #     false_positives = np.cumsum(false_positives)
-    #     true_positives = np.cumsum(true_positives)
-
-    #     # compute recall and precision
-    #     recall = true_positives / num_annotations
-    #     precision = true_positives / \
-    #         np.maximum(true_positives + false_positives,
-    #                    np.finfo(np.float64).eps)
-
-    #     # compute average precision
-    #     average_precision = _compute_ap(recall, precision)
-    #     average_precisions[label] = average_precision, num_annotations
-
-    # print('\nmAP:')
-    # for label in range(generator.num_classes()):
-    #     label_name = generator.label_to_name(label)
-    #     print('{}: {}'.format(label_name, average_precisions[label][0]))
-    #     print("Precision: ", precision[-1])
-    #     print("Recall: ", recall[-1])
-
-    #     if save_path != None:
-    #         plt.plot(recall, precision)
-    #         # naming the x axis
-    #         plt.xlabel('Recall')
-    #         # naming the y axis
-    #         plt.ylabel('Precision')
-
-    #         # giving a title to my graph
-    #         plt.title('Precision Recall curve')
-
-    #         # function to show the plot
-    #         plt.savefig(save_path+'/'+label_name+'_precision_recall.jpg')
+            print('detections.shape: ', detections.shape)
+            print('annotations.shape: ', annotations.shape)
 
     # return average_precisions
     return 0.5
