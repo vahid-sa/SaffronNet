@@ -83,9 +83,9 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
                 center_alpha = transformed_anchors[idxs[0][j], :]
                 x, y, alpha = int(center_alpha[0]), int(
                     center_alpha[1]), int(center_alpha[2])
-                label_name = labels[int(classification[idxs[0][j]])]
+                # label_name = labels[int(classification[idxs[0][j]])]
                 score = scores[j]
-                caption = '{} {:.3f}'.format(label_name, score)
+                # caption = '{} {:.3f}'.format(label_name, score)
                 image_orig = draw_line(
                     image=image_orig,
                     p=(x, y),

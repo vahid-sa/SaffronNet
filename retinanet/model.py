@@ -190,7 +190,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
-        self.img_number = 0
+        self.img_number = -1
         self.regressionModel = RegressionModel(512)
         self.classificationModel = ClassificationModel(
             512, num_classes=num_classes)
@@ -251,13 +251,14 @@ class ResNet(nn.Module):
             img = draw_line(
                 image=img,
                 p=(x, y),
-                alpha=alpha,
-                line_color=(0, 255, 255),
+                alpha=(90-alpha),
+                line_color=(0, 255, 0),
                 center_color=(255, 0, 0),
                 line_thickness=2,
                 half_line=True)
-        cv.imwrite(os.path.join(path, "{}.jpg".format(
-            self.img_number)), (img*255).astype(np.int32))
+
+        cv.imwrite(
+            os.path.join(path, "{}_{}.jpg".format(self.img_number, predictions.shape[0])), (img*255).astype(np.int32))
 
     def forward(self, inputs):
         if self.training:
@@ -299,7 +300,7 @@ class ResNet(nn.Module):
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
-                scores_over_thresh = (scores > 0.05)
+                scores_over_thresh = (scores > 0.5)
                 if scores_over_thresh.sum() == 0:
                     # no boxes to NMS, just continue
                     continue
@@ -312,22 +313,19 @@ class ResNet(nn.Module):
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
-                for i in range(3):
-                    tmp_anchors_nms_idx = nms(
-                        anchorBoxes[(count // 3)*i:(count // 3)*(i+1)],
-                        scores[(count // 3)*i:(count // 3)*(i+1)],
-                        0.5)
-                    anchors_nms_idx = torch.cat(
-                        (anchors_nms_idx, tmp_anchors_nms_idx))
-
+                anchors_nms_idx = nms(
+                    anchorBoxes,
+                    scores,
+                    0.5)
                 # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
-                self.save_img_with_predictions(
-                    img=(img_batch[0, :, :, :].permute(
-                        1, 2, 0)).cpu().detach().numpy(),
-                    predictions=anchorBoxes[anchors_nms_idx].cpu(
-                    ).detach().numpy()
-                )
+                # if self.img_number % 10 == 0:
+                #     self.save_img_with_predictions(
+                #         img=(img_batch[0, :, :, :].permute(
+                #             1, 2, 0)).cpu().detach().numpy(),
+                #         predictions=anchorBoxes[anchors_nms_idx].cpu(
+                #         ).detach().numpy()
+                #     )
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
