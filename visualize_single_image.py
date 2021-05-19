@@ -63,7 +63,9 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
             (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
         image = new_image.astype(np.float32)
-
+        image /= 255
+        image -= [0.485, 0.456, 0.406]
+        image /= [0.229, 0.224, 0.225]
         image = np.expand_dims(image, 0)
         image = np.transpose(image, (0, 3, 1, 2))
         with torch.no_grad():
@@ -77,7 +79,7 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
             scores, classification, transformed_anchors = model(
                 image.cuda().float())
             print('Elapsed time: {}'.format(time.time() - st))
-            idxs = np.where(scores.cpu() > 0.95)
+            idxs = np.where(scores.cpu() > 0.5)
             transformed_anchors = transformed_anchors.cpu().detach().numpy()
             for j in range(idxs[0].shape[0]):
                 center_alpha = transformed_anchors[idxs[0][j], :]
@@ -91,7 +93,7 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
                     p=(x, y),
                     alpha=alpha,
                     line_color=(0, 255, 0),
-                    center_color=(255, 0, 0),
+                    center_color=(0, 0, 255),
                     half_line=True)
             cv2.imwrite(
                 os.path.join(output_dir, "{0}.jpg".format(img_name)), image_orig)
