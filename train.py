@@ -204,8 +204,8 @@ def main(args=None):
 
         scheduler.step(np.mean(epoch_loss))
 
-        torch.save(retinanet.module, '{}_retinanet_{}.pt'.format(
-            parser.dataset, epoch_num))
+        # torch.save(retinanet.module, '{}_retinanet_{}.pt'.format(
+        #     parser.dataset, epoch_num))
 
     retinanet.eval()
     if parser.save_dir:
