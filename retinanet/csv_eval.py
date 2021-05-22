@@ -201,10 +201,11 @@ def visualize_predictions(img, acc_pred, dec_pred, anots):
         img = draw_line(
             image=img,
             p=(x, y),
-            alpha=alpha,
+            alpha=90 - alpha,
             line_color=ANOT['LINE'],
             center_color=ANOT['CENTER'],
-            line_thickness=3
+            line_thickness=3,
+            half_line=True
         )
 
     for p in acc_pred:
@@ -213,10 +214,11 @@ def visualize_predictions(img, acc_pred, dec_pred, anots):
         img = draw_line(
             image=img,
             p=(x, y),
-            alpha=alpha,
+            alpha=90 - alpha,
             line_color=ACC['LINE'],
             center_color=ACC['CENTER'],
-            line_thickness=3
+            line_thickness=3,
+            half_line=True
         )
 
     for p in dec_pred:
@@ -225,10 +227,11 @@ def visualize_predictions(img, acc_pred, dec_pred, anots):
         img = draw_line(
             image=img,
             p=(x, y),
-            alpha=alpha,
+            alpha=90 - alpha,
             line_color=DEC['LINE'],
             center_color=DEC['CENTER'],
-            line_thickness=3
+            line_thickness=3,
+            half_line=True
         )
     return img
 
