@@ -20,6 +20,7 @@ print('CUDA available: {}'.format(torch.cuda.is_available()))
 
 
 def main(args=None):
+    max_mAp = 0
     parser = argparse.ArgumentParser(
         description='Simple training script for training a RetinaNet network.')
 
@@ -192,6 +193,14 @@ def main(args=None):
             print('Evaluating dataset')
 
             mAP = csv_eval.evaluate(dataset_val, retinanet)
+            if mAP > max_mAp:
+                print('mAp improved from {} to {}'.format(max_mAp, mAP))
+                max_mAp = mAP
+                if parser.save_dir:
+                    torch.save(retinanet, os.path.join(
+                        parser.save_dir, 'best_model_mAp.pt'))
+                else:
+                    torch.save(retinanet, 'best_model_mAp.pt')
 
         scheduler.step(np.mean(epoch_loss))
 
