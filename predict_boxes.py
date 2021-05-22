@@ -62,7 +62,9 @@ def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
         new_image = np.zeros((rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
         image = new_image.astype(np.float32)
-
+        image /= 255
+        image -= [0.485, 0.456, 0.406]
+        image /= [0.229, 0.224, 0.225]
         image = np.expand_dims(image, 0)
         image = np.transpose(image, (0, 3, 1, 2))
         with torch.no_grad():
@@ -80,8 +82,6 @@ def detect_image(image_dir, filenames, model_path, class_list, ext=".jpg"):
         transformed_anchors = transformed_anchors.cpu().detach().numpy()
         # print("scores: {0}   class: {1}   anchors: {2}".format(scores.shape, classification.shape, transformed_anchors.shape))
         # print("scores: {0}   class: {1}   anchors: {2}".format(scores.dtype, classification.dtype, transformed_anchors.dtype))
-        print(scores[0])
-        print(np.unique(classification))
         # bboxes.extend(np.concatenate((transformed_anchors, classification, scores), axis=1))
     return bboxes
 

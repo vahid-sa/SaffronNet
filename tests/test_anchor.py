@@ -7,7 +7,7 @@ class TestAnchor(unittest.TestCase):
     """
 
     def test_generate_anchors(self):
-        """ test that it can generate corect base anchors
+        """ test that it can generate correct base anchors
         """
         data = {
             'angle_split': 4,

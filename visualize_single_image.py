@@ -6,8 +6,10 @@ import csv
 import cv2
 import argparse
 import json
-# from retinanet.nms import nms
+import torchvision
+from retinanet.settings import NUM_VARIABLES
 from utils.visutils import draw_line
+from retinanet import imageloader
 
 
 def load_classes(csv_reader):
@@ -99,6 +101,107 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
                 os.path.join(output_dir, "{0}.jpg".format(img_name)), image_orig)
 
 
+def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
+    """ Get the detections from the retinanet using the generator.
+    The result is a list of lists such that the size is:
+        all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
+    # Arguments
+        dataset         : The generator used to run images through the retinanet.
+        retinanet           : The retinanet to run on the images.
+        score_threshold : The score confidence threshold to use.
+        max_detections  : The maximum number of detections to use per image.
+        save_path       : The path to save the images with visualized detections to.
+    # Returns
+        A list of lists containing the detections for each image in the generator.
+    """
+    all_detections = [None for j in range(len(dataset))]
+
+    retinanet.eval()
+
+    with torch.no_grad():
+
+        for index in range(len(dataset)):
+            data = dataset[index]
+            scale = data['scale']
+
+            # run network
+            if torch.cuda.is_available():
+                scores, labels, boxes = retinanet(data['img'].permute(
+                    2, 0, 1).cuda().float().unsqueeze(dim=0))
+            else:
+                scores, labels, boxes = retinanet(
+                    data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
+            scores = scores.cpu().numpy()
+            labels = labels.cpu().numpy()
+            boxes = boxes.cpu().numpy()
+
+            # correct boxes for image scale
+            boxes /= scale
+
+            # select detections
+            image_boxes = boxes
+            image_scores = scores
+            image_labels = labels
+            img_name = int(data["name"])
+            img_name_col = np.full(shape=(len(image_scores), 1), fill_value=img_name, dtype=np.int32)
+            image_detections = np.concatenate([img_name_col, image_boxes, np.expand_dims(
+                image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
+            all_detections[index] = image_detections
+
+            print('{}/{}'.format(index + 1, len(dataset)))
+
+    return all_detections
+
+
+def draw(loader, detections, images_dir, output_dir, ext=".jpg"):
+    assert len(loader) == len(detections), "detections and loader images must be same length"
+    unnormalize = imageloader.UnNormalizer()
+    for i in range(len(loader)):
+        img_path = os.path.join(images_dir, "{0}{1}".format(loader[i]["name"], ext))
+        img = cv2.imread(img_path)
+        detection = detections[i][0]
+        print("detection:\n",detection)
+        for j in range(len(detection)):
+            det = detection[j]
+            im_name, x, y, alpha, score, label = det
+            img = draw_line(
+                image=img,
+                p=(x, y),
+                alpha=90.0 - alpha,
+                line_color=(0, 255, 0),
+                center_color=(0, 0, 255),
+                half_line=True)
+        save_path = os.path.join(output_dir, loader[i]["name"] + ext)
+        cv2.imwrite(save_path, img)
+        print("saved", i)
+
+
+def detect_draw(filenames_path, partition, class_list, images_dir, output_dir, model_path, image_extension=".jpg"):
+    transform = torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()])
+    loader = imageloader.CSVDataset(
+        filenames_path=filenames_path,
+        partition=partition,
+        class_list=class_list,
+        images_dir=images_dir,
+        image_extension=image_extension,
+        transform=transform,
+    )
+    retinanet = torch.load(model_path)
+
+    use_gpu = True
+
+    if use_gpu:
+        if torch.cuda.is_available():
+            retinanet = retinanet.cuda()
+
+    retinanet.training = False
+    retinanet.eval()
+    retinanet.module.freeze_bn()
+
+    all_detections = _get_detections(loader, retinanet)
+    draw(loader=loader, detections=all_detections, output_dir=output_dir, images_dir=images_dir)
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(
@@ -106,7 +209,8 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--image_dir', help='Path to directory containing images')
-    parser.add_argument('--model_path', help='Path to model')
+    parser.add_argument(
+        '--model_path', help='Path to model')
     parser.add_argument(
         "--path_mod", help="supervised | unsupervised | validation | test")
     parser.add_argument(
@@ -121,10 +225,18 @@ if __name__ == '__main__':
     names = json.loads(str_names)
     assert parser.path_mod in "supervised | unsupervised | validation | test"
 
-    detect_image(
-        image_dir=parser.image_dir,
-        filenames=names[parser.path_mod],
-        model_path=parser.model_path,
+    detect_draw(
+        filenames_path="annotations/filenames.json",
+        partition=parser.path_mod,
         class_list=parser.class_list,
-        output_dir=parser.output_dir
+        output_dir=parser.output_dir,
+        images_dir=parser.image_dir,
+        model_path=parser.model_path,
     )
+    # detect_image(
+    #     image_dir=parser.image_dir,
+    #     filenames=names[parser.path_mod],
+    #     model_path=parser.model_path,
+    #     class_list=parser.class_list,
+    #     output_dir=parser.output_dir
+    # )

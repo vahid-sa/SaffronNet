@@ -108,15 +108,16 @@ class CSVDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        img = self.load_image(idx)
-        sample = {'img': img}
+        img, img_name = self.load_image(idx)
+        sample = {'img': img, 'name':img_name}
         if self.transform is not None:
             sample = self.transform(sample)
 
         return sample
 
     def load_image(self, image_index):
-        image_path = osp.join(self.img_dir, self.image_names[image_index] + self.ext)
+        img_name = self.image_names[image_index]
+        image_path = osp.join(self.img_dir, img_name + self.ext)
         img = cv.imread(image_path)
 
         if len(img.shape) == 2:
@@ -124,7 +125,7 @@ class CSVDataset(Dataset):
         else:
             img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
 
-        return img.astype(np.float32)/255.0
+        return img.astype(np.float32)/255.0, img_name
 
     def name_to_label(self, name):
         return self.classes[name]
@@ -145,6 +146,7 @@ def collater(data):
 
     imgs = [s['img'] for s in data]
     scales = [s['scale'] for s in data]
+    names=[s["name"] for s in data]
 
     widths = [int(s.shape[0]) for s in imgs]
     heights = [int(s.shape[1]) for s in imgs]
@@ -161,7 +163,7 @@ def collater(data):
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
 
-    return {'img': padded_imgs, 'scale': scales}
+    return {'img': padded_imgs, 'scale': scales, 'name': names}
 
 
 class Resizer(object):
@@ -198,8 +200,7 @@ class Resizer(object):
         new_image = np.zeros(
             (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
-
-        return {'img': torch.from_numpy(new_image), 'scale': scale}
+        return {'img': torch.from_numpy(new_image), 'scale': scale, "name": sample["name"]}
 
 
 class Normalizer(object):
@@ -212,7 +213,7 @@ class Normalizer(object):
 
     def __call__(self, sample):
         image = sample['img']
-        return {'img': ((image.astype(np.float32)-self.mean)/self.std)}
+        return {'img': ((image.astype(np.float32)-self.mean)/self.std), "name": sample["name"]}
 
 
 class UnNormalizer(object):
