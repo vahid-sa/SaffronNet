@@ -8,7 +8,7 @@ import json
 import os
 import matplotlib.pyplot as plt
 import torch
-from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, NUM_VARIABLES
+from .settings import ACC, ANOT, DEC, NUM_VARIABLES
 
 
 def prepare(a, b):
@@ -182,19 +182,6 @@ def _get_annotations(generator):
 
 
 def visualize_predictions(img, acc_pred, dec_pred, anots):
-    ACC = {
-        'LINE': (0, 255, 0),
-        'CENTER': (0, 0, 255)
-    }
-    DEC = {
-        'LINE': (255, 0, 0),
-        'CENTER': (0, 0, 255)
-    }
-    ANOT = {
-        'LINE': (0, 0, 0),
-        'CENTER': (255, 255, 555)
-    }
-
     for a in anots:
         a = a[:NUM_VARIABLES]
         x, y, alpha = a

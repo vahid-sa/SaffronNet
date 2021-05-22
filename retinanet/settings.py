@@ -4,3 +4,16 @@ STRIDE = 8
 MAX_ANOT_ANCHOR_POSITION_DISTANCE = 8
 MAX_ANOT_ANCHOR_ANGLE_DISTANCE = (360.0/ANGLE_SPLIT) / 1.8
 X, Y, ALPHA, LABEL, SCORE, TRUTH = 0, 1, 2, 3, 4, 5
+
+ACC = {
+    'LINE': (0, 255, 0),
+    'CENTER': (0, 0, 255)
+}
+DEC = {
+    'LINE': (255, 0, 0),
+    'CENTER': (0, 0, 255)
+}
+ANOT = {
+    'LINE': (0, 0, 0),
+    'CENTER': (255, 255, 555)
+}
