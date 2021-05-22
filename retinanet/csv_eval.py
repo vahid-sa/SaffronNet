@@ -304,11 +304,10 @@ def evaluate(
                     dec_pred.append(d)
             img = generator.load_image(i)
             img = (img * 255).astype(np.int32)
+            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
             img = visualize_predictions(img, acc_pred, dec_pred, annotations)
             cv.imwrite(
-                '/content/drive/MyDrive/Dataset/ValidationOuputModel/' + '{}.jpg'.format(i), img)
-            # plt.imshow(img)
-            # plt.show()
+                '/content/drive/MyDrive/Dataset/ValidationOuputModel/' + '{}-A{}-D{}.jpg'.format(i, len(acc_pred), len(dec_pred)), img)
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
             average_precisions[label] = 0, 0
