@@ -110,7 +110,8 @@ def get_file_names(file_path):
     reader = csv.reader(fileIO, delimiter=',')
     # file_id = int(osp.splitext(osp.basename(file_path))[0])
     for row in reader:
-        names.append(row[0])
+        if not row[0] in names:
+            names.append(row[0])
     fileIO.close()
     return names
 
