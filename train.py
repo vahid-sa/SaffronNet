@@ -195,7 +195,7 @@ def main(args=None):
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP))
-                max_mAp = mAP
+                max_mAp = mAP[0][0]
                 if parser.save_dir:
                     torch.save(retinanet, os.path.join(
                         parser.save_dir, 'best_model_mAp.pt'))
