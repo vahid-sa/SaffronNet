@@ -301,7 +301,7 @@ def evaluate(
                     dec_pred.append(d)
             img = generator.load_image(i)
             img = (img * 255).astype(np.int32)
-            img = visualize_predictions(img, acc_pred, dec_pred, anots)
+            img = visualize_predictions(img, acc_pred, dec_pred, annotations)
             cv.imshow(img)
             plt.imshow(img)
             plt.show()
