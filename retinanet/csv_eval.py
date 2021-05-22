@@ -181,8 +181,8 @@ def _get_annotations(generator):
 def evaluate(
     generator,
     retinanet,
-    XYd_threshold=MAX_ANOT_ANCHOR_POSITION_DISTANCE,
-    Ad_threshold=MAX_ANOT_ANCHOR_ANGLE_DISTANCE,
+    XYd_threshold=10,
+    Ad_threshold=25,
     score_threshold=0.05,
     max_detections=100,
     save_path=None
@@ -230,9 +230,7 @@ def evaluate(
                 dxys, dangels = compute_distance(
                     np.expand_dims(d, axis=0), annotations)
 
-                distances = (
-                    2 * dxys) + (dangels * (MAX_ANOT_ANCHOR_POSITION_DISTANCE / MAX_ANOT_ANCHOR_ANGLE_DISTANCE))
-                assigned_annotation = np.argmin(distances, axis=1)
+                assigned_annotation = np.argmin(dxys, axis=1)
                 min_dxy = dxys[0, assigned_annotation]
                 min_dangel = dangels[0, assigned_annotation]
 
@@ -250,43 +248,43 @@ def evaluate(
             continue
 
         # sort by score
-    #     indices = np.argsort(-scores)
-    #     false_positives = false_positives[indices]
-    #     true_positives = true_positives[indices]
+        indices = np.argsort(-scores)
+        false_positives = false_positives[indices]
+        true_positives = true_positives[indices]
 
-    #     # compute false positives and true positives
-    #     false_positives = np.cumsum(false_positives)
-    #     true_positives = np.cumsum(true_positives)
+        # compute false positives and true positives
+        false_positives = np.cumsum(false_positives)
+        true_positives = np.cumsum(true_positives)
 
-    #     # compute recall and precision
-    #     recall = true_positives / num_annotations
-    #     precision = true_positives / \
-    #         np.maximum(true_positives + false_positives,
-    #                    np.finfo(np.float64).eps)
+        # compute recall and precision
+        recall = true_positives / num_annotations
+        precision = true_positives / \
+            np.maximum(true_positives + false_positives,
+                       np.finfo(np.float64).eps)
 
-    #     # compute average precision
-    #     average_precision = _compute_ap(recall, precision)
-    #     average_precisions[label] = average_precision, num_annotations
+        # compute average precision
+        average_precision = _compute_ap(recall, precision)
+        average_precisions[label] = average_precision, num_annotations
 
-    # print('\nmAP:')
-    # for label in range(generator.num_classes()):
-    #     label_name = generator.label_to_name(label)
-    #     print('{}: {}'.format(label_name, average_precisions[label][0]))
-    #     print("Precision: ", precision[-1])
-    #     print("Recall: ", recall[-1])
+    print('\nmAP:')
+    for label in range(generator.num_classes()):
+        label_name = generator.label_to_name(label)
+        print('{}: {}'.format(label_name, average_precisions[label][0]))
+        print("Precision: ", precision[-1])
+        print("Recall: ", recall[-1])
 
-    #     if save_path != None:
-    #         plt.plot(recall, precision)
-    #         # naming the x axis
-    #         plt.xlabel('Recall')
-    #         # naming the y axis
-    #         plt.ylabel('Precision')
+        if save_path != None:
+            plt.plot(recall, precision)
+            # naming the x axis
+            plt.xlabel('Recall')
+            # naming the y axis
+            plt.ylabel('Precision')
 
-    #         # giving a title to my graph
-    #         plt.title('Precision Recall curve')
+            # giving a title to my graph
+            plt.title('Precision Recall curve')
 
-    #         # function to show the plot
-    #         plt.savefig(save_path+'/'+label_name+'_precision_recall.jpg')
+            # function to show the plot
+            plt.savefig(save_path+'/'+label_name+'_precision_recall.jpg')
 
-    # return average_precisions
-    return 0.5
+    return average_precisions
+    # return 0.5
