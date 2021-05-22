@@ -1,6 +1,9 @@
 from __future__ import print_function
-
+from retinanet.dataloader import CSVDataset
 import numpy as np
+import cv2 as cv
+from utils.visutils import draw_line
+import matplotlib.pyplot as plt
 import json
 import os
 import matplotlib.pyplot as plt
@@ -178,8 +181,60 @@ def _get_annotations(generator):
     return all_annotations
 
 
+def visualize_predictions(img, acc_pred, dec_pred, anots):
+    ACC = {
+        'LINE': (0, 255, 0),
+        'CENTER': (0, 0, 255)
+    }
+    DEC = {
+        'LINE': (255, 0, 0),
+        'CENTER': (0, 0, 255)
+    }
+    ANOT = {
+        'LINE': (0, 0, 0),
+        'CENTER': (255, 255, 555)
+    }
+
+    for a in anots:
+        a = a[:NUM_VARIABLES]
+        x, y, alpha = a
+        img = draw_line(
+            image=img,
+            p=(x, y),
+            alpha=alpha,
+            line_color=ANOT['LINE'],
+            center_color=ANOT['CENTER'],
+            line_thickness=3
+        )
+
+    for p in acc_pred:
+        p = p[:NUM_VARIABLES]
+        x, y, alpha = p
+        img = draw_line(
+            image=img,
+            p=(x, y),
+            alpha=alpha,
+            line_color=ACC['LINE'],
+            center_color=ACC['CENTER'],
+            line_thickness=3
+        )
+
+    for p in dec_pred:
+        p = p[:NUM_VARIABLES]
+        x, y, alpha = p
+        img = draw_line(
+            image=img,
+            p=(x, y),
+            alpha=alpha,
+            line_color=DEC['LINE'],
+            center_color=DEC['CENTER'],
+            line_thickness=3
+        )
+    return img
+
+
 def evaluate(
-    generator,
+    generator: CSVDataset,
     retinanet,
     XYd_threshold=10,
     Ad_threshold=25,
@@ -218,7 +273,8 @@ def evaluate(
             annotations = all_annotations[i][label]
             num_annotations += annotations.shape[0]
             detected_annotations = []
-
+            acc_pred = []
+            dec_pred = []
             for d in detections:
                 scores = np.append(scores, d[NUM_VARIABLES])
 
@@ -238,10 +294,17 @@ def evaluate(
                     false_positives = np.append(false_positives, 0)
                     true_positives = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
+                    acc_pred.append(d)
                 else:
                     false_positives = np.append(false_positives, 1)
                     true_positives = np.append(true_positives, 0)
-
+                    dec_pred.append(d)
+            img = generator.load_image(i)
+            img = (img * 255).astype(np.int32)
+            img = visualize_predictions(img, acc_pred, dec_pred, anots)
+            cv.imshow(img)
+            plt.imshow(img)
+            plt.show()
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
             average_precisions[label] = 0, 0
