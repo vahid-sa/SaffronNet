@@ -303,7 +303,8 @@ def evaluate(
                     true_positives = np.append(true_positives, 0)
                     dec_pred.append(d)
             img = generator.load_image(i)
-            img = (img * 255).astype(np.int32)
+            img = (img * 255).astype(np.int8)
+            print(img.shape)
             img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
             img = visualize_predictions(img, acc_pred, dec_pred, annotations)
             cv.imwrite(
