@@ -302,7 +302,7 @@ def evaluate(
             img = generator.load_image(i)
             img = (img * 255).astype(np.int32)
             img = visualize_predictions(img, acc_pred, dec_pred, annotations)
-            cv.imshow(img)
+            cv.imshow('validation', img)
             plt.imshow(img)
             plt.show()
         # no annotations -> AP for this class is 0 (is this correct?)
