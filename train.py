@@ -193,7 +193,7 @@ def main(args=None):
             print('Evaluating dataset')
 
             mAP = csv_eval.evaluate(dataset_val, retinanet)
-            if mAP > max_mAp:
+            if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP))
                 max_mAp = mAP[0][0]
                 if parser.save_dir:
