@@ -185,9 +185,7 @@ def main(args=None):
                 continue
 
         if parser.dataset == 'coco':
-
             print('Evaluating dataset')
-
             coco_eval.evaluate_coco(dataset_val, retinanet)
 
         elif parser.dataset == 'csv' and parser.csv_val is not None:
@@ -200,6 +198,8 @@ def main(args=None):
                 if parser.save_dir:
                     torch.save(retinanet, os.path.join(
                         parser.save_dir, 'best_model_loss.pt'))
+                    torch.save(retinanet.module, '{}_retinanet_{}_best_loss.pt'.format(parser.
+                                                                                       dataset, epoch_num))
                 else:
                     torch.save(retinanet, 'best_model_loss.pt')
 
