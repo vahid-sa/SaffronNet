@@ -52,6 +52,8 @@ def main(args=None):
     parser = argparse.ArgumentParser(
         description='Simple analizing script for training a RetinaNet network.')
 
+    parser.add_argument('--images_dir', help='image files direction', type=str)
+
     parser.add_argument(
         '--dataset', help='Dataset type, must be one of csv or coco.')
     parser.add_argument(
