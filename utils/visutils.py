@@ -1,9 +1,18 @@
+from argparse import RawDescriptionHelpFormatter
 import math
+from enum import Enum
 import cv2 as cv
 import numpy as np
 from typing import Tuple
+from retinanet.settings import ACC, DEC, RAW
 POINT = Tuple[float, float]
 COLOR = Tuple[int, int, int]
+
+
+class DrawMode(Enum):
+    Accept = 1
+    Decline = 2
+    Raw = 3
 
 
 def _y(m, x, b):
@@ -43,6 +52,41 @@ def write_angle(
     cv.putText(image, str(alpha), (int(x)+x_bias, int(y)+y_bias),
                font, 0.8, color, 2, cv.LINE_AA)
     return image
+
+
+def get_dots(x, y, alpha, distance_thresh=20, m_thresh=100, ignore_center=False):
+    """ Calculte (x1, y1, x2 , y2) from (x, y, alpha)
+        inputs: 
+            x: x pos
+            y: y pos
+            alpha: saffron angle
+
+        return: 
+
+    """
+    if alpha == 0:
+        alpha += 0.001
+
+    m = math.tan(alpha * (math.pi / 180))
+    m = max(min(m, m_thresh), -m_thresh)
+
+    b = _b(x, y, m)
+
+    sign = 1 if math.cos(alpha * (math.pi / 180)) > 0 else -1
+    new_x = x + sign*20
+    new_y = _y(m, new_x, b)
+    while distance(x, y, new_x, new_y) > distance_thresh:
+        new_x = x + sign*(abs(x - new_x) / 2)
+        new_y = _y(m, new_x, b)
+
+    if ignore_center:
+        _new_x = x - sign*abs(x - new_x)
+        _new_y = _y(m, _new_x, b)
+    else:
+        _new_x = x
+        _new_y = y
+
+    return _new_x, _new_y, new_x, new_y
 
 
 def draw_line(
@@ -89,36 +133,23 @@ def draw_line(
     return img
 
 
-def get_dots(x, y, alpha, distance_thresh=20, m_thresh=100, ignore_center=False):
-    """ Calculte (x1, y1, x2 , y2) from (x, y, alpha)
-        inputs: 
-            x: x pos
-            y: y pos
-            alpha: saffron angle
+def std_draw_line(image: np.np.ndarray, point: POINT, alpha: float, mode: DrawMode):
+    if mode == DrawMode.Accept:
+        line_color = ACC['LINE']
+        center_color = ACC['CENTER']
+    elif mode == DrawMode.Decline:
+        line_color = ACC['LINE']
+        center_color = ACC['CENTER']
+    elif mode == DrawMode.Raw:
+        line_color = RAW['LINE']
+        center_color = RAW['CENTER']
 
-        return: 
-
-    """
-    if alpha == 0:
-        alpha += 0.001
-
-    m = math.tan(alpha * (math.pi / 180))
-    m = max(min(m, m_thresh), -m_thresh)
-
-    b = _b(x, y, m)
-
-    sign = 1 if math.cos(alpha * (math.pi / 180)) > 0 else -1
-    new_x = x + sign*20
-    new_y = _y(m, new_x, b)
-    while distance(x, y, new_x, new_y) > distance_thresh:
-        new_x = x + sign*(abs(x - new_x) / 2)
-        new_y = _y(m, new_x, b)
-
-    if ignore_center:
-        _new_x = x - sign*abs(x - new_x)
-        _new_y = _y(m, _new_x, b)
-    else:
-        _new_x = x
-        _new_y = y
-
-    return _new_x, _new_y, new_x, new_y
+    return draw_line(
+        image=image,
+        p=point,
+        alpha=alpha,
+        line_color=line_color,
+        center_color=center_color,
+        half_line=True,
+        line_thickness=3
+    )
