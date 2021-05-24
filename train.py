@@ -1,5 +1,6 @@
 import argparse
 import collections
+from math import inf
 
 import numpy as np
 import os
@@ -21,6 +22,7 @@ print('CUDA available: {}'.format(torch.cuda.is_available()))
 
 def main(args=None):
     max_mAp = 0
+    min_loss = inf
     parser = argparse.ArgumentParser(
         description='Simple training script for training a RetinaNet network.')
 
@@ -189,8 +191,17 @@ def main(args=None):
             coco_eval.evaluate_coco(dataset_val, retinanet)
 
         elif parser.dataset == 'csv' and parser.csv_val is not None:
-
+            mean_epoch_loss = np.mean(epoch_loss)
             print('Evaluating dataset')
+            if min_loss > mean_epoch_loss:
+                print("loss improved from from {} to {}".format(
+                    min_loss, mean_epoch_loss))
+                min_loss = mean_epoch_loss
+                if parser.save_dir:
+                    torch.save(retinanet, os.path.join(
+                        parser.save_dir, 'best_model_loss.pt'))
+                else:
+                    torch.save(retinanet, 'best_model_loss.pt')
 
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
@@ -203,9 +214,6 @@ def main(args=None):
                     torch.save(retinanet, 'best_model_mAp.pt')
 
         scheduler.step(np.mean(epoch_loss))
-
-        # torch.save(retinanet.module, '{}_retinanet_{}.pt'.format(
-        #     parser.dataset, epoch_num))
 
     retinanet.eval()
     if parser.save_dir:
