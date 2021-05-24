@@ -101,28 +101,27 @@ def detect_image(image_dir, filenames, model_path, class_list, output_dir, ext="
                 os.path.join(output_dir, "{0}.jpg".format(img_name)), image_orig)
 
 
-def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
+def _get_detections(dataset, retinanet):
     """ Get the detections from the retinanet using the generator.
     The result is a list of lists such that the size is:
         all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
     # Arguments
         dataset         : The generator used to run images through the retinanet.
         retinanet           : The retinanet to run on the images.
-        score_threshold : The score confidence threshold to use.
-        max_detections  : The maximum number of detections to use per image.
-        save_path       : The path to save the images with visualized detections to.
     # Returns
         A list of lists containing the detections for each image in the generator.
     """
-    all_detections = [None for j in range(len(dataset))]
+    all_detections = list()
 
     retinanet.eval()
 
+    print("detecting")
     with torch.no_grad():
 
         for index in range(len(dataset)):
             data = dataset[index]
             scale = data['scale']
+            img_name = float(int(data["name"]))
 
             # run network
             if torch.cuda.is_available():
@@ -134,7 +133,8 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
             scores = scores.cpu().numpy()
             labels = labels.cpu().numpy()
             boxes = boxes.cpu().numpy()
-
+            if boxes.shape[0] == 0:
+                continue
             # correct boxes for image scale
             boxes /= scale
 
@@ -142,27 +142,25 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
             image_boxes = boxes
             image_scores = scores
             image_labels = labels
-            img_name = int(data["name"])
             img_name_col = np.full(shape=(len(image_scores), 1), fill_value=img_name, dtype=np.int32)
             image_detections = np.concatenate([img_name_col, image_boxes, np.expand_dims(
                 image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
-            all_detections[index] = image_detections
+            all_detections.extend(image_detections.tolist())
+            print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
+    print()
+    return np.asarray(all_detections, dtype=np.float64)
 
-            print('{}/{}'.format(index + 1, len(dataset)))
 
-    return all_detections
-
-
-def draw(loader, detections, images_dir, output_dir, ext=".jpg"):
-    assert len(loader) == len(detections), "detections and loader images must be same length"
-    unnormalize = imageloader.UnNormalizer()
+def draw(loader, all_detections, images_dir, output_dir, ext=".jpg"):
+    name_col = all_detections[:, 0]
     for i in range(len(loader)):
         img_path = os.path.join(images_dir, "{0}{1}".format(loader[i]["name"], ext))
         img = cv2.imread(img_path)
-        detection = detections[i][0]
-        print("detection:\n",detection)
-        for j in range(len(detection)):
-            det = detection[j]
+        img_name = float(int(loader[i]["name"]))
+        image_detections = all_detections[name_col == img_name]
+        print("detection:\n",image_detections)
+        for j in range(len(image_detections)):
+            det = image_detections[j]
             im_name, x, y, alpha, score, label = det
             img = draw_line(
                 image=img,
@@ -199,7 +197,8 @@ def detect_draw(filenames_path, partition, class_list, images_dir, output_dir, m
     retinanet.module.freeze_bn()
 
     all_detections = _get_detections(loader, retinanet)
-    draw(loader=loader, detections=all_detections, output_dir=output_dir, images_dir=images_dir)
+    print("all_detections\n",all_detections)
+    draw(loader=loader, all_detections=all_detections, output_dir=output_dir, images_dir=images_dir)
 
 
 if __name__ == '__main__':
