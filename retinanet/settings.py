@@ -6,14 +6,16 @@ MAX_ANOT_ANCHOR_ANGLE_DISTANCE = (360.0/ANGLE_SPLIT) / 1.8
 X, Y, ALPHA, LABEL, SCORE, TRUTH = 0, 1, 2, 3, 4, 5
 
 ACC = {
-    'LINE': (0, 255, 0),
-    'CENTER': (0, 0, 255)
+    'LINE': (129, 178, 20),
+    'CENTER': (248, 245, 241)
 }
+
 DEC = {
-    'LINE': (255, 0, 0),
-    'CENTER': (0, 0, 255)
+    'LINE': (255, 0, 92),
+    'CENTER': (248, 245, 241)
 }
+
 ANOT = {
     'LINE': (0, 0, 0),
-    'CENTER': (255, 255, 555)
+    'CENTER': (0, 0, 0)
 }
