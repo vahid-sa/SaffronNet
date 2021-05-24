@@ -181,56 +181,15 @@ def _get_annotations(generator):
     return all_annotations
 
 
-def visualize_predictions(img, acc_pred, dec_pred, anots):
-    for a in anots:
-        a = a[:NUM_VARIABLES]
-        x, y, alpha = a
-        img = draw_line(
-            image=img,
-            p=(x, y),
-            alpha=90 - alpha,
-            line_color=ANOT['LINE'],
-            center_color=ANOT['CENTER'],
-            line_thickness=3,
-            half_line=True
-        )
-
-    for p in acc_pred:
-        p = p[:NUM_VARIABLES]
-        x, y, alpha = p
-        img = draw_line(
-            image=img,
-            p=(x, y),
-            alpha=90 - alpha,
-            line_color=ACC['LINE'],
-            center_color=ACC['CENTER'],
-            line_thickness=3,
-            half_line=True
-        )
-
-    for p in dec_pred:
-        p = p[:NUM_VARIABLES]
-        x, y, alpha = p
-        img = draw_line(
-            image=img,
-            p=(x, y),
-            alpha=90 - alpha,
-            line_color=DEC['LINE'],
-            center_color=DEC['CENTER'],
-            line_thickness=3,
-            half_line=True
-        )
-    return img
-
-
 def evaluate(
     generator: CSVDataset,
     retinanet,
     XYd_threshold=10,
     Ad_threshold=25,
     score_threshold=0.05,
-    max_detections=100,
-    save_path=None
+    max_detections=1000,
+    save_path=None,
+    visualizer=None
 ):
     """ Evaluate a given dataset using a given retinanet.
     # Arguments
@@ -289,12 +248,14 @@ def evaluate(
                     false_positives = np.append(false_positives, 1)
                     true_positives = np.append(true_positives, 0)
                     dec_pred.append(d)
-            img = generator.load_image(i)
-            img = (img * 255).astype(np.float32)
-            img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-            img = visualize_predictions(img, acc_pred, dec_pred, annotations)
-            cv.imwrite(
-                '/content/drive/MyDrive/Dataset/ValidationOuputModel/' + '{}-A{}-D{}.jpg'.format(i, len(acc_pred), len(dec_pred)), img)
+
+            if visualizer is not None:
+                img = generator.load_image(i)
+                img = (img * 255).astype(np.float32)
+                img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+                visualizer(image=img, image_name=i, accepted_predictions=acc_pred,
+                           declined_predictions=dec_pred, annotations=annotations)
+
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
             average_precisions[label] = 0, 0
@@ -325,9 +286,6 @@ def evaluate(
         print('{}: {}'.format(label_name, average_precisions[label][0]))
         if average_precisions[label][0] < 0.01:
             continue
-        print("Precision: ", precision[-1])
-        print("Recall: ", recall[-1])
-
         if save_path != None:
             plt.plot(recall, precision)
             # naming the x axis
