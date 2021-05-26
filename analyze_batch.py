@@ -29,7 +29,6 @@ def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Accept)
 
-    declined_predictions = declined_predictions[:, :NUM_VARIABLES]
     for pred in declined_predictions:
         x, y, alpha = pred[0], pred[1], pred[2]
         image = std_draw_line(
@@ -40,8 +39,8 @@ def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions
     data = {}
     data['num accepted anchors'] = len(accepted_predictions)
     data['num declined anchors'] = len(declined_predictions)
-    data['accepted anchors'] = accepted_predictions
-    data['declined anchors'] = declined_predictions
+    data['accepted anchors'] = [list(x) for x in accepted_predictions]
+    data['declined anchors'] = [list(x) for x in declined_predictions]
 
     with open(os.path.join(write_dir, '{}.json'.format(image_name)), 'w') as outfile:
         json.dump(data, outfile)
