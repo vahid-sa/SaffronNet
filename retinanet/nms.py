@@ -21,7 +21,7 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
     """
     print('B: ', len(predictions))
     predictions, scores = filter(predictions, scores)
-    print('B: ', len(predictions))
+    print('A: ', len(predictions))
 
     # print('scores: ', scores)
     # print('predictions: ', predictions)
