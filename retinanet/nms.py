@@ -5,6 +5,11 @@ import torch as t
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
+def filter(predictions, scores, min_score=0.5):
+    thresh = (scores > min_score)
+    return predictions[thresh], scores[thresh]
+
+
 def nms(predictions, scores, min_score=0.5, max_distance=20):
     """ Apply nms over predictions
         inputs: 
@@ -14,15 +19,15 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
         return:
             anchors_nms_idx: np.ndarray
     """
-    print('scores: ', scores)
-    print('predictions: ', predictions)
+    # print('scores: ', scores)
+    # print('predictions: ', predictions)
 
-    scores_over_thresh = (scores > min_score)
-    scores = scores[scores_over_thresh]
-    predictions = predictions[scores_over_thresh]
+    # scores_over_thresh = (scores > min_score)
+    # scores = scores[scores_over_thresh]
+    # predictions = predictions[scores_over_thresh]
 
-    print('scores: ', scores)
-    print('predictions: ', predictions)
+    # print('scores: ', scores)
+    # print('predictions: ', predictions)
 
     x = predictions[:, 0]
     y = predictions[:, 1]

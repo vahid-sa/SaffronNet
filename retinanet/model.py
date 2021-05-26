@@ -5,7 +5,7 @@ import numpy as np
 import cv2 as cv
 import os
 import torch.utils.model_zoo as model_zoo
-from retinanet.nms import nms
+from retinanet.nms import nms, filter
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from retinanet.anchors import Anchors
 from retinanet import losses
@@ -300,14 +300,17 @@ class ResNet(nn.Module):
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
-                # scores_over_thresh = (scores > 0.05)
+                anchorBoxes = torch.squeeze(transformed_anchors)
+
+                # scores_over_thresh = (scores > 0.5)
                 # if scores_over_thresh.sum() == 0:
-                # no boxes to NMS, just continue
-                # continue
+                #     # no boxes to NMS, just continue
+                #     continue
 
                 # scores = scores[scores_over_thresh]
-                anchorBoxes = torch.squeeze(transformed_anchors)
                 # anchorBoxes = anchorBoxes[scores_over_thresh]
+
+                anchorBoxes, scores = filter(anchorBoxes, scores)
                 count = scores.shape[0]
 
                 anchors_nms_idx = torch.Tensor([]).long()
