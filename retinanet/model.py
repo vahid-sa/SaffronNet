@@ -312,11 +312,14 @@ class ResNet(nn.Module):
 
                 # anchorBoxes, scores = filter(anchorBoxes, scores)
                 count = scores.shape[0]
+                print('B: ', len(anchorBoxes))
+                anchorBoxes, scores = filter(anchorBoxes, scores)
+                print('A: ', len(anchorBoxes))
 
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
-                
+
                 print('B: ', len(anchorBoxes))
                 anchors_nms_idx = nms(
                     anchorBoxes,

@@ -19,9 +19,6 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
         return:
             anchors_nms_idx: np.ndarray
     """
-    print('B: ', len(predictions))
-    predictions, scores = filter(predictions, scores)
-    print('A: ', len(predictions))
 
     # print('scores: ', scores)
     # print('predictions: ', predictions)
