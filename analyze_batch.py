@@ -18,25 +18,20 @@ import torch
 def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions: List,
                         declined_predictions: List, annotations: List, write_dir: str):
 
-    accepted_predictions = np.array(accepted_predictions)
-    annotations = np.array(annotations)
-    declined_predictions = np.array(declined_predictions)
-
     annotations = annotations[:, :NUM_VARIABLES]
     for anot in annotations:
-        x, y, alpha = anot
+        x, y, alpha = anot[0], anot[1], anot[2]
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Raw)
 
-    accepted_predictions = accepted_predictions[:, :NUM_VARIABLES]
     for pred in accepted_predictions:
-        x, y, alpha = pred
+        x, y, alpha = pred[0], pred[1], pred[2]
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Accept)
 
     declined_predictions = declined_predictions[:, :NUM_VARIABLES]
     for pred in declined_predictions:
-        x, y, alpha = pred
+        x, y, alpha = pred[0], pred[1], pred[2]
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Decline)
 
