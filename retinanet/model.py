@@ -300,7 +300,7 @@ class ResNet(nn.Module):
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
-                scores_over_thresh = (scores > 0.05)
+                scores_over_thresh = (scores > 0.5)
                 if scores_over_thresh.sum() == 0:
                     # no boxes to NMS, just continue
                     continue
