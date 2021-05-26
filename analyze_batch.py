@@ -65,6 +65,8 @@ def main(args=None):
     parser.add_argument(
         '--model_path', help='model path')
 
+    parser = parser.parse_args(args)
+
     generator = CSVDataset(train_file=parser.csv_test, class_list=parser.csv_classes,
                            transform=transforms.Compose([Normalizer(), Resizer()]), images_dir=parser.images_dir, image_extension=parser.ext)
 
