@@ -186,7 +186,8 @@ def evaluate(
     score_threshold=0.05,
     max_detections=1000,
     save_path=None,
-    visualizer=None
+    visualizer=None,
+    write_dir=None
 ):
     """ Evaluate a given dataset using a given retinanet.
     # Arguments
@@ -251,7 +252,7 @@ def evaluate(
                 img = (img * 255).astype(np.float32)
                 img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
                 visualizer(image=img, image_name=i, accepted_predictions=acc_pred,
-                           declined_predictions=dec_pred, annotations=annotations)
+                           declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir)
 
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:

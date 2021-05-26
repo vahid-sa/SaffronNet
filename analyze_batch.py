@@ -66,6 +66,9 @@ def main(args=None):
     parser.add_argument(
         '--ext', help='image file extention', type=str, default='.jpg')
 
+    parser.add_argument(
+        '--write_dir', help='write dir for analysys', type=str)
+
     parser = parser.parse_args(args)
 
     generator = CSVDataset(train_file=parser.csv_test, class_list=parser.csv_classes,
@@ -82,7 +85,8 @@ def main(args=None):
     evaluate(
         generator=generator,
         retinanet=model,
-        visualizer=analysis_visualizer
+        visualizer=analysis_visualizer,
+        write_dir=parser.write_dir
     )
 
 
