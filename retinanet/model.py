@@ -312,7 +312,6 @@ class ResNet(nn.Module):
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
 
-                print('B: ', len(anchorBoxes))
                 anchors_nms_idx = nms(
                     anchorBoxes,
                     scores,
