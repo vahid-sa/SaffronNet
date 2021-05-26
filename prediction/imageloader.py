@@ -7,8 +7,7 @@ import random
 import csv
 import json
 
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 
 import skimage.io
@@ -17,7 +16,6 @@ import skimage.color
 import skimage
 import cv2 as cv
 
-from .settings import NUM_VARIABLES
 
 
 class CSVDataset(Dataset):
