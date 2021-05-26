@@ -41,7 +41,7 @@ def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Decline)
 
     cv.imwrite(
-        os.path.join(write_dir, '{}.jpg'.format(image_name), image))
+        os.path.join(write_dir, '{}.jpg'.format(image_name)), image)
     data = {}
     data['num accepted anchors'] = len(accepted_predictions)
     data['num declined anchors'] = len(declined_predictions)
