@@ -1,6 +1,9 @@
+import csv
+
 import torch
 import torch.nn as nn
 import numpy as np
+from typing import Tuple
 
 
 def conv3x3(in_planes, out_planes, stride=1):
@@ -141,19 +144,70 @@ class ClipBoxes(nn.Module):
 
         return center_alphas
 
-def load_classes(csv_reader):
-    result = {}
 
-    for line, row in enumerate(csv_reader):
-        line += 1
+def prepare(a, b):
+    # extend as cols
+    repetitions = b.shape[0]
+    at = np.transpose([a] * repetitions)
+    # extend as rows
+    repetitions = a.shape[0]
+    bt = np.tile(b, (repetitions, 1))
+    return at, bt
 
-        try:
-            class_name, class_id = row
-        except ValueError:
-            raise(ValueError('line {}: format should be \'class_name,class_id\''.format(line)))
-        class_id = int(class_id)
 
-        if class_name in result:
-            raise ValueError('line {}: duplicate class name: \'{}\''.format(line, class_name))
-        result[class_name] = class_id
-    return result
+def distance(ax, bx):
+    """
+    ax: (N) ndarray of float
+    bx: (K) ndarray of float
+    Returns
+    -------
+    (N, K) ndarray of distance between all x in ax, bx
+    """
+    ax, bx = prepare(ax, bx)
+    return np.abs(ax - bx)
+
+
+def compute_distance(a, b) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Parameters
+    ----------
+    a: (N, 3) ndarray of float
+    b: (K, 3) ndarray of float
+    Returns
+    -------
+    distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
+    """
+    ax = a[:, 0]
+    bx = b[:, 0]
+
+    ay = a[:, 1]
+    by = b[:, 1]
+
+    aa = a[:, 2]
+    ba = b[:, 2]
+
+    dalpha = distance(ax=aa, bx=ba)
+    dx = distance(ax=ax, bx=bx)
+    dy = distance(ax=ay, bx=by)
+    dxy = np.sqrt(dx*dx + dy*dy)
+
+    return dxy, dalpha
+
+
+def load_classes(csv_class_list_path: str) -> Tuple[dict, dict]:
+    """
+    loads class list defined in dataset
+    :param csv_class_list_path: path to csv class list
+    :return: a dict that converts class to index and a dict that convert index to class
+    """
+    index_to_class = dict()
+    class_to_index = dict()
+    fileIO = open(csv_class_list_path, "r")
+    reader = csv.reader(fileIO, delimiter=",")
+    for row in reader:
+        class_name, str_class_index = row
+        index_to_class[str_class_index] = class_name
+        class_to_index[class_name] = str_class_index
+    fileIO.close()
+    return class_to_index, index_to_class
+

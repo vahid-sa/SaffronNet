@@ -6,55 +6,9 @@ import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import torch
 from .settings import NUM_VARIABLES
+from retinanet.utils import compute_distance
 
 
-def prepare(a, b):
-    # extend as cols
-    repetitions = b.shape[0]
-    at = np.transpose([a] * repetitions)
-    # extend as rows
-    repetitions = a.shape[0]
-    bt = np.tile(b, (repetitions, 1))
-    return at, bt
-
-
-def distance(ax, bx):
-    """ 
-    ax: (N) ndarray of float
-    bx: (K) ndarray of float
-    Returns
-    -------
-    (N, K) ndarray of distance between all x in ax, bx
-    """
-    ax, bx = prepare(ax, bx)
-    return np.abs(ax - bx)
-
-
-def compute_distance(a, b):
-    """
-    Parameters
-    ----------
-    a: (N, 3) ndarray of float
-    b: (K, 3) ndarray of float
-    Returns
-    -------
-    distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
-    """
-    ax = a[:, 0]
-    bx = b[:, 0]
-
-    ay = a[:, 1]
-    by = b[:, 1]
-
-    aa = a[:, 2]
-    ba = b[:, 2]
-
-    dalpha = distance(ax=aa, bx=ba)
-    dx = distance(ax=ax, bx=bx)
-    dy = distance(ax=ay, bx=by)
-    dxy = np.sqrt(dx*dx + dy*dy)
-
-    return dxy, dalpha
 
 
 def _compute_ap(recall, precision):
