@@ -53,7 +53,6 @@ def main(args=None):
         description='Simple analizing script for training a RetinaNet network.')
 
     parser.add_argument('--images_dir', help='image files direction', type=str)
-
     parser.add_argument(
         '--dataset', help='Dataset type, must be one of csv or coco.')
     parser.add_argument(
@@ -64,6 +63,8 @@ def main(args=None):
         '--csv_classes', help='Path to file containing class list (see readme)')
     parser.add_argument(
         '--model_path', help='model path')
+    parser.add_argument(
+        '--ext', help='image file extention', type=str, default='.jpg')
 
     parser = parser.parse_args(args)
 
