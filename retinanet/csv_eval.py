@@ -2,13 +2,10 @@ from __future__ import print_function
 from retinanet.dataloader import CSVDataset
 import numpy as np
 import cv2 as cv
-from utils.visutils import draw_line
 import matplotlib.pyplot as plt
-import json
-import os
 import matplotlib.pyplot as plt
 import torch
-from .settings import ACC, ANOT, DEC, NUM_VARIABLES
+from .settings import NUM_VARIABLES
 
 
 def prepare(a, b):
