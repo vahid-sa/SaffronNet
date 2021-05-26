@@ -133,7 +133,7 @@ def draw_line(
     return img
 
 
-def std_draw_line(image: np.np.ndarray, point: POINT, alpha: float, mode: DrawMode):
+def std_draw_line(image: np.ndarray, point: POINT, alpha: float, mode: DrawMode):
     if mode == DrawMode.Accept:
         line_color = ACC['LINE']
         center_color = ACC['CENTER']
