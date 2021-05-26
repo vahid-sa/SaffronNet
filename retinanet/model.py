@@ -317,15 +317,7 @@ class ResNet(nn.Module):
                     anchorBoxes,
                     scores,
                     0.5)
-                # anchors_nms_idx = torch.arange(0, anchorBoxes.shape[0])
                 print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
-                # if self.img_number % 10 == 0:
-                #     self.save_img_with_predictions(
-                #         img=(img_batch[0, :, :, :].permute(
-                #             1, 2, 0)).cpu().detach().numpy(),
-                #         predictions=anchorBoxes[anchors_nms_idx].cpu(
-                #         ).detach().numpy()
-                #     )
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
