@@ -18,14 +18,16 @@ import torch
 def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions: List,
                         declined_predictions: List, annotations: List, write_dir: str):
 
+    accepted_predictions = np.array(accepted_predictions)
+    annotations = np.array(annotations)
+    declined_predictions = np.array(declined_predictions)
+
     annotations = annotations[:, :NUM_VARIABLES]
     for anot in annotations:
         x, y, alpha = anot
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Raw)
 
-    print('accepted_predictions: ', accepted_predictions)
-    print('NUM_VARIABLES: ', NUM_VARIABLES)
     accepted_predictions = accepted_predictions[:, :NUM_VARIABLES]
     for pred in accepted_predictions:
         x, y, alpha = pred
