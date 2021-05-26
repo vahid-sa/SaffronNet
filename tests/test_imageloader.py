@@ -3,7 +3,7 @@ import torchvision
 import numpy as np
 import torch
 from retinanet.settings import NUM_VARIABLES
-from retinanet import imageloader
+from predict import imageloader
 
 
 class TestLoader(unittest.TestCase):

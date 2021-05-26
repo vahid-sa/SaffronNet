@@ -7,9 +7,8 @@ import cv2
 import argparse
 import json
 import torchvision
-from retinanet.settings import NUM_VARIABLES
 from utils.visutils import draw_line
-from retinanet import imageloader
+from prediction import imageloader
 
 
 def load_classes(csv_reader):
