@@ -300,7 +300,7 @@ class ResNet(nn.Module):
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
-                scores_over_thresh = (scores > 0.5)
+                scores_over_thresh = (scores > 0.05)
                 if scores_over_thresh.sum() == 0:
                     # no boxes to NMS, just continue
                     continue
@@ -317,7 +317,6 @@ class ResNet(nn.Module):
                     anchorBoxes,
                     scores,
                     0.5)
-                print('anchors_nms_idx.shape: ', anchors_nms_idx.shape)
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
