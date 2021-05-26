@@ -5,7 +5,7 @@ import torch as t
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
-def nms(predictions, scores, min_score=5, max_distance=20):
+def nms(predictions, scores, min_score=0.5, max_distance=20):
     """ Apply nms over predictions
         inputs: 
             predictions: torch.Tensor (num_anchors, 3)
