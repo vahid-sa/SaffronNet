@@ -24,6 +24,8 @@ def analysis_visualizer(image: np.ndarray, image_name: str, accepted_predictions
         image = std_draw_line(
             image=image, point=(x, y), alpha=90-alpha, mode=DrawMode.Raw)
 
+    print('accepted_predictions: ', accepted_predictions)
+    print('NUM_VARIABLES: ', NUM_VARIABLES)
     accepted_predictions = accepted_predictions[:, :NUM_VARIABLES]
     for pred in accepted_predictions:
         x, y, alpha = pred
