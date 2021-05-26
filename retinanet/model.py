@@ -302,19 +302,11 @@ class ResNet(nn.Module):
                 scores = torch.squeeze(classification[:, :, i])
                 anchorBoxes = torch.squeeze(transformed_anchors)
 
-                # scores_over_thresh = (scores > 0.5)
-                # if scores_over_thresh.sum() == 0:
-                #     # no boxes to NMS, just continue
-                #     continue
-
-                # scores = scores[scores_over_thresh]
-                # anchorBoxes = anchorBoxes[scores_over_thresh]
-
-                # anchorBoxes, scores = filter(anchorBoxes, scores)
+                anchorBoxes, scores = filter(
+                    anchorBoxes, scores, min_score=0.05)
                 count = scores.shape[0]
-                print('B: ', len(anchorBoxes))
-                anchorBoxes, scores = filter(anchorBoxes, scores)
-                print('A: ', len(anchorBoxes))
+                if count == 0:
+                    continue
 
                 anchors_nms_idx = torch.Tensor([]).long()
                 if torch.cuda.is_available():

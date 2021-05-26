@@ -20,15 +20,10 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
             anchors_nms_idx: np.ndarray
     """
 
-    # print('scores: ', scores)
-    # print('predictions: ', predictions)
-
-    # scores_over_thresh = (scores > min_score)
-    # scores = scores[scores_over_thresh]
-    # predictions = predictions[scores_over_thresh]
-
-    # print('scores: ', scores)
-    # print('predictions: ', predictions)
+    scores_over_thresh = (scores > min_score)
+    original_indices = scores_over_thresh.nonzero(as_tuple=True)[0]
+    scores = scores[scores_over_thresh]
+    predictions = predictions[scores_over_thresh]
 
     x = predictions[:, 0]
     y = predictions[:, 1]
@@ -45,4 +40,6 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
         filter_row = t.cat([filter_row[:arg_max], filter_row[arg_max+1:]])
         dxy[:, filter_row] = -1
 
-    return (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+    valid_indices = (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+
+    return original_indices[valid_indices]
