@@ -123,23 +123,17 @@ uncertain_mode = np.full(shape=(uncertain_boxes.shape[0], 1), fill_value=visuali
 corrected_mode = np.full(shape=(corrected_boxes.shape[0], 1), fill_value=visualize.active_color_mode.corrected.value, dtype=np.float64)
 
 
-print("gt1", gt_boxes.shape)
-print("uncertain1", uncertain_boxes.shape)
-print("noisy1", noisy_boxes.shape)
-print("co1rrected1", corrected_boxes.shape)
+
+
+
 gt_boxes = np.concatenate([gt_boxes[:, [NAME, X, Y, ALPHA]], gt_mode], axis=1)
 uncertain_boxes = np.concatenate([uncertain_boxes[:, [NAME, X, Y, ALPHA]], uncertain_mode], axis=1)
 noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA]], noisy_mode], axis=1)
 corrected_boxes = np.concatenate([corrected_boxes[:, [NAME, X, Y, ALPHA]], corrected_mode], axis=1)
-print("gt2", gt_boxes.shape)
-print("uncertain2", uncertain_boxes.shape)
-print("noisy2", noisy_boxes.shape)
-print("corrected2", corrected_boxes.shape)
+
 # boxes = np.concatenate([gt_boxes, uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
 boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
-print("\nboxes1: ",boxes.shape)
 boxes = boxes[boxes[:, NAME].argsort()]
-print("\nboxes2: ",boxes.shape)
 assert osp.isdir(args.output_dir), "Output directory does not exist."
 visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir = args.output_dir)
 
