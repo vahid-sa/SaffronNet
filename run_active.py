@@ -1,9 +1,14 @@
 import numpy as np
 import torch
 import torchvision
+import csv
+from os import path as osp
 import argparse
 from prediction import imageloader, predict_boxes
 import labeling
+from retinanet import utils
+from retinanet.settings import NAME, X, Y, ALPHA, LABEL
+import visualize
 
 
 parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
@@ -20,9 +25,33 @@ parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", d
                     choices=[".jpg", ".png"], help="image extension")
 parser.add_argument("-m", "--model", required=True, type=str, dest="model",
                     help="path to the model")
-parser.add_argument("--annotations", type=str, required=True, dest="annotations",
+parser.add_argument("-a", "--annotations", type=str, required=True, dest="annotations",
                     help="path to the ground_truth annotations compatible with partition")
+parser.add_argument("-o", "--output-dir", type=str, required=True, dest="output_dir",
+                    help="where to save output")
 args = parser.parse_args()
+
+class_to_index, index_to_class = utils.load_classes(csv_class_list_path=args.class_list)
+
+
+def load_annotations(path: str) -> np.array:
+    assert osp.isfile(path), "File does not exist."
+    boxes = list()
+    fileIO = open(path, "r")
+    reader = csv.reader(fileIO, delimiter = ",")
+    for row in reader:
+        if row[X] == row[Y] == row[ALPHA] == row[LABEL] == "":
+            continue
+        box = [None, None, None, None, None]
+        box[NAME] = float(row[NAME])
+        box[X] = float(row[X])
+        box[Y] = float(row[Y])
+        box[ALPHA] = float(row[ALPHA])
+        box[LABEL] = float(class_to_index[row[LABEL]])
+        boxes.append(box)
+    fileIO.close()
+    boxes = np.asarray(boxes, dtype=np.float64)
+    return np.asarray(boxes[:, [NAME, X, Y, ALPHA, LABEL]], dtype=np.float64)
 
 
 def detect(dataset, retinanet):
@@ -85,4 +114,32 @@ loader = imageloader.CSVDataset(
 
 model = torch.load(args.model)
 pred_boxes = detect(dataset=loader, retinanet=model)
-print("pred_boxes", pred_boxes.dtype, pred_boxes.shape)
+gt_boxes = load_annotations(path=args.annotations)
+uncertain_boxes, noisy_boxes = predict_boxes.split_uncertain_and_noisy(pred_boxes)
+corrected_boxes = labeling.label(all_gts=gt_boxes, all_uncertain_preds=uncertain_boxes)
+gt_mode = np.full(shape=(gt_boxes.shape[0], 1), fill_value=visualize.active_color_mode.gt.value, dtype=np.float64)
+noisy_mode = np.full(shape=(noisy_boxes.shape[0], 1), fill_value=visualize.active_color_mode.noisy.value, dtype=np.float64)
+uncertain_mode = np.full(shape=(uncertain_boxes.shape[0], 1), fill_value=visualize.active_color_mode.uncertain.value, dtype=np.float64)
+corrected_mode = np.full(shape=(corrected_boxes.shape[0], 1), fill_value=visualize.active_color_mode.corrected.value, dtype=np.float64)
+
+
+print("gt1", gt_boxes.shape)
+print("uncertain1", uncertain_boxes.shape)
+print("noisy1", noisy_boxes.shape)
+print("co1rrected1", corrected_boxes.shape)
+gt_boxes = np.concatenate([gt_boxes[:, [NAME, X, Y, ALPHA]], gt_mode], axis=1)
+uncertain_boxes = np.concatenate([uncertain_boxes[:, [NAME, X, Y, ALPHA]], uncertain_mode], axis=1)
+noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA]], noisy_mode], axis=1)
+corrected_boxes = np.concatenate([corrected_boxes[:, [NAME, X, Y, ALPHA]], corrected_mode], axis=1)
+print("gt2", gt_boxes.shape)
+print("uncertain2", uncertain_boxes.shape)
+print("noisy2", noisy_boxes.shape)
+print("corrected2", corrected_boxes.shape)
+# boxes = np.concatenate([gt_boxes, uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
+boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
+print("\nboxes1: ",boxes.shape)
+boxes = boxes[boxes[:, NAME].argsort()]
+print("\nboxes2: ",boxes.shape)
+assert osp.isdir(args.output_dir), "Output directory does not exist."
+visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir = args.output_dir)
+

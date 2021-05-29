@@ -23,7 +23,7 @@ def label(all_gts, all_uncertain_preds):
             gts_to_preds_index_candidates[assined_gts_to_preds_candidates < settings.MAX_CORRECTABLE_DISTANCE])
         assined_annotations = gts[assigned_gts_to_preds_indices].tolist()
         selected_gts.extend(assined_annotations)
-    return selected_gts
+    return np.asarray(selected_gts, dtype=np.float32)
 
 
 def filter_noisy_by_asked_box_images(noisy_boxes, valid_imagenames):

@@ -21,7 +21,7 @@ import sys
 import cv2 as cv
 
 
-assert torch.__version__.split('.')[0] == '1'
+assert torch.__version__.split_uncertain_and_noisy('.')[0] == '1'
 
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
