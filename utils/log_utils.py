@@ -1,3 +1,6 @@
+import json
+
+
 def log_history(epoch, logs, HISTORY_PATH):
     temp = {}
     for key, value in logs.items():
