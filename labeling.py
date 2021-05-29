@@ -52,10 +52,10 @@ def write_boxes(boxes: np.array, path: str, mod: str, class_dict: dict):
     if mod == "active":
         write_mod = "w"
     elif mod == "corrected":
-        write_mod = "wb"
+        write_mod = "a"
     else:
         raise AssertionError("mod can be 'active' or 'corrected'.")
-    fileIO =  open(path, mode=mod)
+    fileIO = open(path, mode=write_mod)
     writer = csv.writer(fileIO, delimiter=",")
     for box in boxes:
         name = format(int(box[NAME]), "03d")
@@ -63,3 +63,4 @@ def write_boxes(boxes: np.array, path: str, mod: str, class_dict: dict):
         label = class_dict[str(int(box[LABEL]))]
         writable_box = (name, x, y, alpha, label, truth)
         writer.writerow(writable_box)
+    fileIO.close()
