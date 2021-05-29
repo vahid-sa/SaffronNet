@@ -39,7 +39,9 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
         arg_max = t.argmax(candidate_scores)
         filter_row = t.cat([filter_row[:arg_max], filter_row[arg_max+1:]])
         dxy[:, filter_row] = -1
-
-    valid_indices = (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+    try:
+        valid_indices = (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+    except IndexError:
+        return []
 
     return original_indices[valid_indices]
