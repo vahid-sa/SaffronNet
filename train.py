@@ -223,7 +223,8 @@ def main(args=None):
                     'loss': np.mean(epoch_loss),
                     'mAp': max_mAp
                 }, PATH)
-                torch.save(retinanet, 'best_model_mAp_ready_to_eval.pt')
+                torch.save(retinanet, os.path.join(os.path.dirname(
+                    PATH), 'best_model_mAp_ready_to_eval.pt'))
 
         log_history(epoch_num, {'loss': np.mean(epoch_loss), 'mAp': mAP}, os.path.join(
             os.path.dirname(PATH), 'history.json'))
