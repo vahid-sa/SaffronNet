@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader
 
 from retinanet import coco_eval
 from retinanet import csv_eval
+from utils.log_utils import log_history
 
 assert torch.__version__.split_uncertain_and_noisy('.')[0] == '1'
 
@@ -46,6 +47,11 @@ def main(args=None):
     parser.add_argument('--save_dir', help='model save dir', type=str)
     parser.add_argument('--epochs', help='Number of epochs',
                         type=int, default=100)
+
+    parser.add_argument('--resume', help='flag for resume training',
+                        type=bool, default=False)
+    parser.add_argument(
+        '--model_path', help='path for saved state dict to resuming model')
 
     parser = parser.parse_args(args)
 
@@ -132,7 +138,14 @@ def main(args=None):
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=3, verbose=True)
 
-    loss_hist = collections.deque(maxlen=500)
+    loss_hist = []
+    mAp_hist = []
+
+    if parser.resume:
+        checkpoint = torch.load(parser.model_path)
+        retinanet.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
     retinanet.train()
     retinanet.module.freeze_bn()
@@ -176,7 +189,7 @@ def main(args=None):
 
                 print(
                     'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
-                        epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(loss_hist)))
+                        epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(epoch_loss)))
 
                 del classification_loss
                 del regression_loss
@@ -184,10 +197,10 @@ def main(args=None):
                 print(e)
                 continue
 
+        mAP = None
         if parser.dataset == 'coco':
             print('Evaluating dataset')
             coco_eval.evaluate_coco(dataset_val, retinanet)
-
         elif parser.dataset == 'csv' and parser.csv_val is not None:
             mean_epoch_loss = np.mean(epoch_loss)
             print('Evaluating dataset')
@@ -196,23 +209,38 @@ def main(args=None):
                     min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
                 if parser.save_dir:
-                    torch.save(retinanet, os.path.join(
-                        parser.save_dir, 'best_model_loss.pt'))
-                    torch.save(retinanet.module, '{}_retinanet_{}_best_loss.pt'.format(parser.
-                                                                                       dataset, epoch_num))
+                    PATH = os.path.join(parser.save_dir, 'best_model_loss.pt')
                 else:
-                    torch.save(retinanet, 'best_model_loss.pt')
+                    PATH = 'best_model_loss.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
+                }, PATH)
 
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
-                print('mAp improved from {} to {}'.format(max_mAp, mAP))
+                print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
                 if parser.save_dir:
-                    torch.save(retinanet, os.path.join(
-                        parser.save_dir, 'best_model_mAp.pt'))
+                    PATH = os.path.join(parser.save_dir, 'best_model_mAp.pt')
                 else:
-                    torch.save(retinanet, 'best_model_mAp.pt')
+                    PATH = 'best_model_mAp.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'loss': np.mean(epoch_loss),
+                    'mAp': max_mAp
+                }, PATH)
+                torch.save(retinanet, os.path.join(os.path.dirname(
+                    PATH), 'best_model_mAp_ready_to_eval.pt'))
 
+        log_history(epoch_num, {'loss': np.mean(epoch_loss), 'mAp': mAP}, os.path.join(
+            os.path.dirname(PATH), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
 
     retinanet.eval()

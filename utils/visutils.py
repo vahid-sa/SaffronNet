@@ -138,8 +138,8 @@ def std_draw_line(image: np.ndarray, point: POINT, alpha: float, mode: DrawMode)
         line_color = ACC['LINE']
         center_color = ACC['CENTER']
     elif mode == DrawMode.Decline:
-        line_color = ACC['LINE']
-        center_color = ACC['CENTER']
+        line_color = DEC['LINE']
+        center_color = DEC['CENTER']
     elif mode == DrawMode.Raw:
         line_color = RAW['LINE']
         center_color = RAW['CENTER']
