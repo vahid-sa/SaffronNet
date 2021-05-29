@@ -48,6 +48,11 @@ def main(args=None):
     parser.add_argument('--epochs', help='Number of epochs',
                         type=int, default=100)
 
+    parser.add_argument('--resume', help='flag for resume training',
+                        type=bool, default=False)
+    parser.add_argument(
+        '--model_path', help='path for saved state dict to resuming model')
+
     parser = parser.parse_args(args)
 
     # Create the data loaders
@@ -136,6 +141,12 @@ def main(args=None):
     loss_hist = []
     mAp_hist = []
 
+    if parser.resume:
+        checkpoint = torch.load(parser.model_path)
+        retinanet.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
     retinanet.train()
     retinanet.module.freeze_bn()
 
@@ -205,6 +216,7 @@ def main(args=None):
                     'epoch': epoch_num,
                     'model_state_dict': retinanet.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
                     'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
                 }, PATH)
 
@@ -220,6 +232,7 @@ def main(args=None):
                     'epoch': epoch_num,
                     'model_state_dict': retinanet.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
                     'loss': np.mean(epoch_loss),
                     'mAp': max_mAp
                 }, PATH)
