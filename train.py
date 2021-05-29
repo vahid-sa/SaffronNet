@@ -196,22 +196,33 @@ def main(args=None):
                     min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
                 if parser.save_dir:
-                    torch.save(retinanet, os.path.join(
-                        parser.save_dir, 'best_model_loss.pt'))
-                    torch.save(retinanet.module, '{}_retinanet_{}_best_loss.pt'.format(parser.
-                                                                                       dataset, epoch_num))
+                    PATH = os.path.join(parser.save_dir, 'best_model_loss.pt')
                 else:
-                    torch.save(retinanet, 'best_model_loss.pt')
+                    PATH = 'best_model_loss.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': 'Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
+                        float(classification_loss), float(regression_loss), np.mean(loss_hist))
+                }, PATH)
 
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
-                print('mAp improved from {} to {}'.format(max_mAp, mAP))
+                print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
                 if parser.save_dir:
-                    torch.save(retinanet, os.path.join(
-                        parser.save_dir, 'best_model_mAp.pt'))
+                    PATH = os.path.join(parser.save_dir, 'best_model_mAp.pt')
                 else:
-                    torch.save(retinanet, 'best_model_mAp.pt')
+                    PATH = 'best_model_mAp.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': 'Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
+                        float(classification_loss), float(regression_loss), np.mean(loss_hist))
+                }, PATH)
+                torch.save(retinanet, 'best_model_mAp_ready_to_eval.pt')
 
         scheduler.step(np.mean(epoch_loss))
 
