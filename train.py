@@ -226,7 +226,7 @@ def main(args=None):
                 torch.save(retinanet, 'best_model_mAp_ready_to_eval.pt')
 
         log_history(epoch_num, {'loss': np.mean(epoch_loss), 'mAp': mAP}, os.path.join(
-            os.path.dirname(PATH), 'history.csv'))
+            os.path.dirname(PATH), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
 
     retinanet.eval()
