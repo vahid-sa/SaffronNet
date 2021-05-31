@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import random
 import csv
-
+from utils.visutils import DrawMode, std_draw_line
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from torch.utils.data.sampler import Sampler
@@ -15,6 +15,7 @@ from pycocotools.coco import COCO
 import skimage.io
 import skimage.transform
 import skimage.color
+import random
 import skimage
 import cv2 as cv
 
@@ -426,9 +427,13 @@ class Augmenter(object):
 
             rows, cols, channels = image.shape
 
+            for annot in annots:
+                std_draw_line(
+                    image, (annot[0], annot[1]), alpha=annot[2], mode=DrawMode.Raw)
+            cv.imwrite(
+                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image)
             x = annots[:, 0].copy()
             annots[:, 0] = cols - x
-
             sample = {'img': image, 'annot': annots}
 
         return sample
