@@ -254,17 +254,19 @@ class CSVDataset(Dataset):
             ctr_x = a['x']
             ctr_y = a['y']
             alpha = a['alpha']
+            ground_truth_status = a["ground_truth"]
 
             # if (x2-x1) < 1 or (y2-y1) < 1:
             #     continue
 
-            annotation = np.zeros((1, NUM_VARIABLES+1))
+            annotation = np.zeros((1, NUM_VARIABLES+2))
 
             annotation[0, 0] = ctr_x
             annotation[0, 1] = ctr_y
             annotation[0, 2] = alpha
 
             annotation[0, 3] = self.name_to_label(a['class'])
+            annotations[0, 4] = ground_truth_status
             annotations = np.append(annotations, annotation, axis=0)
 
         return annotations
@@ -275,8 +277,13 @@ class CSVDataset(Dataset):
             line += 1
 
             try:
-                img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
-                truth_status = "ground_truth"
+                if len(row) == 5:
+                    img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
+                    truth_status = "ground_truth"
+                elif len(row) > 5:
+                    img_id, ctr_x, ctr_y, alpha, class_name, truth_status = row[:6]
+                else:
+                    raise AssertionError("Annotation format is not correct.")
             except ValueError:
                 raise ValueError(
                     'line {}: format should be \'img_file,ctr_x,ctr_y,alpha,class_name\' or \'img_file,,,,,\''.format(
