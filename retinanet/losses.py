@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
+from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, DAMPENING_PARAMETER
 
 
 def prepare(a, b):
@@ -111,8 +111,7 @@ class FocalLoss(nn.Module):
             # num_anchors x num_annotations
             distance = calc_distance(anchors[0, :, :],
                                      center_alpha_annotation[:, :NUM_VARIABLES])
-            distance_min, distance_argmin = torch.min(
-                distance, dim=1)  # num_anchors x 1
+            distance_min, distance_argmin = torch.min(distance, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
@@ -135,6 +134,12 @@ class FocalLoss(nn.Module):
             targets[positive_indices,
                     assigned_annotations[positive_indices, 3].long()] = 1
 # -------------------------------------------------------------------------
+            dampening_factor = torch.full(size=targets.shape, dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
+            if torch.cuda.is_available():
+                dampening_factor = dampening_factor.cuda()
+            dampening_factor[targets == -1] = 1
+            # unset dampening factor for ground truth
+            dampening_factor[assigned_annotations[positive_indices, 4].long() == 1, :] = 1
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
@@ -159,6 +164,7 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
+            cls_loss *= dampening_factor
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
@@ -188,6 +194,10 @@ class FocalLoss(nn.Module):
                         torch.Tensor([[1, 1, 1]]).cuda()
                 else:
                     targets = targets/torch.Tensor([[1, 1, 1]])
+
+                dampening_factor = torch.full(size=targets.shape[0], dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
+                dampening_factor[assigned_annotations[:, 3] == 1] = 1
+
                 negative_indices = 1 + (~positive_indices)
 
                 regression_diff_xy = torch.abs(
@@ -201,8 +211,10 @@ class FocalLoss(nn.Module):
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0
                 )
+                mean_regression_loss = regression_loss_xy.mean() + regression_diff_angle.mean()
+
                 regression_losses.append(
-                    regression_loss_xy.mean() + regression_diff_angle.mean())
+                    (mean_regression_loss * dampening_factor).mean())
             else:
                 if torch.cuda.is_available():
                     regression_losses.append(torch.tensor(0).float().cuda())
