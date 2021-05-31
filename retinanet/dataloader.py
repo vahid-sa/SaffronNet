@@ -1,11 +1,16 @@
 from __future__ import print_function, division
+import enum
 import sys
 import os
+from numpy.lib import NumpyVersion
 import torch
 import numpy as np
 import random
 import csv
-from utils.visutils import DrawMode, std_draw_line
+import imgaug as ia
+import imgaug.augmenters as iaa
+from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
+from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from torch.utils.data.sampler import Sampler
@@ -419,22 +424,48 @@ class Augmenter(object):
     """ #
     """
 
-    def __call__(self, sample, flip_x=0.5):
+    def __init__(self) -> None:
+        super().__init__()
+        ia.seed(3)
+        self.seq = iaa.Sequential([
+            iaa.Affine(translate_px={"x": (10, 30)}, rotate=(-10, 10)),
+            # color jitter, only affects the image
+            iaa.AddToHueAndSaturation((-50, 50))
+        ])
 
-        if np.random.rand() < flip_x:
+    def __call__(self, sample, aug=0.7):
+
+        if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
-            image = image[:, ::-1, :]
-
             rows, cols, channels = image.shape
+            new_annots = annots.copy()
+            kps = []
+            for x, y, alpha in annots[:, :NUM_VARIABLES]:
+                x0, y0, x1, y1 = get_dots(x, y, alpha)
+                kps.append(Keypoint(x=x0, y=y0))
+                kps.append(Keypoint(x=x1, y=y1))
 
-            for annot in annots:
+            kpsoi = KeypointsOnImage(kps, shape=image.shape)
+
+            image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
+            for i, _ in enumerate(kpsoi_aug.keypoints):
+                if i % 2 == 1:
+                    continue
+                kp = kpsoi_aug.keypoints[i]
+                x0, y0 = kp.x, kp.y
+                kp = kpsoi_aug.keypoints[i+1]
+                x1, y1 = kp.x, kp.y
+
+                alpha = get_alpha(x0, y0, x1, y1)
+                new_annots[i//2, :NUM_VARIABLES] = x0, y0, alpha
+
+            for annot in new_annots:
                 std_draw_line(
-                    image, (annot[0], annot[1]), alpha=annot[2], mode=DrawMode.Raw)
+                    image_aug, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Raw)
+
             cv.imwrite(
                 '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image)
-            x = annots[:, 0].copy()
-            annots[:, 0] = cols - x
-            sample = {'img': image, 'annot': annots}
+            sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
 
