@@ -213,8 +213,16 @@ def load_classes(csv_class_list_path: str) -> Tuple[dict, dict]:
 
 
 class ActiveLabelMode(Enum):
-    gt = 0
-    uncertain = 1
-    noisy = 2
-    ignored = 3
-    corrected = 4
+    noisy = 0
+    corrected = 1
+    gt = 3
+    uncertain = 2
+    ignored = 4
+
+
+class ActiveLabelModeSTR(Enum):
+    noisy = "noisy"
+    gt = "ground_truth"
+    uncertain = "uncertain"
+    corrected = "corrected"
+    ignored = "ignored"
