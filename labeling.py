@@ -5,6 +5,16 @@ from retinanet import settings
 from retinanet.settings import NAME, X, Y, ALPHA, SCORE, LABEL, TRUTH
 
 
+def active_status_int_to_string(int_status: float) -> utils.ActiveLabelModeSTR:
+    if int_status == utils.ActiveLabelMode.corrected.value:
+        str_status = utils.ActiveLabelModeSTR.corrected.value
+    elif int_status == utils.ActiveLabelMode.noisy.value:
+        str_status = utils.ActiveLabelModeSTR.noisy.value
+    else:
+        raise AssertionError("truth_status field can be '0' or '1' ")
+    return str_status
+
+
 def label(all_gts, all_uncertain_preds):
     """
     :param gt: [[filename, x, y, alpha, label]]
@@ -48,19 +58,29 @@ def merge_noisy_and_asked(corrected_boxes, noisy_boxes):
     return sorted_all_boxes
 
 
-def write_boxes(boxes: np.array, path: str, mod: utils.ActiveLabelMode, class_dict: dict):
-    if mod == utils.ActiveLabelMode.noisy.value:
-        write_mod = "w"
-    elif mod == utils.ActiveLabelMode.gt.value:
-        write_mod = "a"
-    else:
-        raise AssertionError("mod can be 'active' or 'corrected'.")
-    fileIO = open(path, mode=write_mod)
+def write_active_boxes(boxes: np.array, path: str, class_dict: dict):
+    assert (len(boxes.shape) == 2) and (
+                boxes.shape[1] == len([NAME, X, Y, ALPHA, LABEL, TRUTH])), "Incorrect boxes format."
+    fileIO = open(path, mode="w")
     writer = csv.writer(fileIO, delimiter=",")
     for box in boxes:
         name = format(int(box[NAME]), "03d")
-        x, y, alpha, truth = box[[X, Y, ALPHA, TRUTH]]
+        x, y, alpha, ground_truth_status = box[[X, Y, ALPHA, TRUTH]]
         label = class_dict[str(int(box[LABEL]))]
-        writable_box = (name, x, y, alpha, label, truth)
+        status = active_status_int_to_string(int_status=ground_truth_status)
+        writable_box = (name, x, y, alpha, label, status)
+        writer.writerow(writable_box)
+    fileIO.close()
+
+
+def write_corrected_boxes(boxes: np.array, path: str, class_dict: dict):
+    assert (len(boxes.shape) == 2) and (boxes.shape[1] == len([NAME, X, Y, ALPHA, LABEL])), "Incorrect boxes format."
+    fileIO = open(path, mode="a")
+    writer = csv.writer(fileIO, delimiter=",")
+    for box in boxes:
+        name = format(int(box[NAME]), "03d")
+        x, y, alpha = box[[X, Y, ALPHA]]
+        label = class_dict[str(int(box[LABEL]))]
+        writable_box = (name, x, y, alpha, label)
         writer.writerow(writable_box)
     fileIO.close()
