@@ -48,10 +48,10 @@ def merge_noisy_and_asked(corrected_boxes, noisy_boxes):
     return sorted_all_boxes
 
 
-def write_boxes(boxes: np.array, path: str, mod: str, class_dict: dict):
-    if mod == "active":
+def write_boxes(boxes: np.array, path: str, mod: utils.ActiveLabelMode, class_dict: dict):
+    if mod == utils.ActiveLabelMode.noisy.value:
         write_mod = "w"
-    elif mod == "corrected":
+    elif mod == utils.ActiveLabelMode.gt.value:
         write_mod = "a"
     else:
         raise AssertionError("mod can be 'active' or 'corrected'.")
