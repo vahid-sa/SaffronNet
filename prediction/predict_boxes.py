@@ -23,13 +23,13 @@ def select_noisy_indices(boxes, uncertain_selected_indices, noisy_thresh=0.25):
     return selected
 
 
-def split(boxes, budget=100):
+def split_uncertain_and_noisy(boxes, budget=100):
     uncertain_indices = select_uncertain_indices(boxes, budget=budget)
     noisy_indices = select_noisy_indices(boxes, uncertain_indices)
     uncertain_boxes = boxes[uncertain_indices]
     noisy_boxes = boxes[noisy_indices]
-    status = np.full(shape=(len(boxes), 1), dtype=np.float64, fill_value=-1)
-    status[uncertain_indices] = 0
-    status[noisy_indices] = 1
-    # return uncertain_boxes, noisy_boxes
-    return np.concatenate((boxes, status), axis=1)
+    # status = np.full(shape=(len(boxes), 1), dtype=np.float64, fill_value=-1)
+    # status[uncertain_indices] = 0
+    # status[noisy_indices] = 1
+    return uncertain_boxes, noisy_boxes
+    # return np.concatenate((boxes, status), axis=1)
