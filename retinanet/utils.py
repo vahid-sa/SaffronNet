@@ -1,4 +1,5 @@
 import csv
+from enum import Enum
 
 import torch
 import torch.nn as nn
@@ -132,7 +133,6 @@ class ClipBoxes(nn.Module):
         super(ClipBoxes, self).__init__()
 
     def forward(self, center_alphas, img):
-
         batch_size, num_channels, height, width = img.shape
 
         center_alphas[:, :, 0] = torch.clamp(center_alphas[:, :, 0], min=0)
@@ -189,7 +189,7 @@ def compute_distance(a, b) -> Tuple[np.ndarray, np.ndarray]:
     dalpha = distance(ax=aa, bx=ba)
     dx = distance(ax=ax, bx=bx)
     dy = distance(ax=ay, bx=by)
-    dxy = np.sqrt(dx*dx + dy*dy)
+    dxy = np.sqrt(dx * dx + dy * dy)
 
     return dxy, dalpha
 
@@ -211,3 +211,10 @@ def load_classes(csv_class_list_path: str) -> Tuple[dict, dict]:
     fileIO.close()
     return class_to_index, index_to_class
 
+
+class ActiveLabelMode(Enum):
+    gt = 0
+    uncertain = 1
+    noisy = 2
+    ignored = 3
+    corrected = 4

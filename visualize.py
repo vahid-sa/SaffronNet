@@ -1,17 +1,9 @@
 import cv2
 from os import path as osp
-from enum import Enum
+
+from retinanet.utils import ActiveLabelMode
 from utils.visutils import draw_line
 from retinanet.settings import NAME, X, Y, ALPHA, SCORE, LABEL, TRUTH
-
-
-class active_color_mode(Enum):
-	gt = 0
-	uncertain = 1
-	noisy = 2
-	ignored = 3
-	corrected = 4
-
 
 active_clor_plate = {0: (0, 0, 0), 1: (0, 0, 255), 2: (0, 255, 0), 3: (255, 0, 0), 4: (0, 255, 255)}
 
@@ -60,7 +52,7 @@ def draw_noisy_uncertain_gt(loader, detections, images_dir, output_dir, ext=".jp
 			det = image_detections[j]
 			im_name, x, y, alpha = det[[NAME, X, Y, ALPHA]]
 			status = det[-1]
-			if status == active_color_mode.uncertain.value or status == active_color_mode.corrected.value:
+			if status == ActiveLabelMode.uncertain.value or status == ActiveLabelMode.corrected.value:
 				hase_uncertain = True
 			line_color = active_clor_plate[status]
 			center_color = (0, 0, 0)
