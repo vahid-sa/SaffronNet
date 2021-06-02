@@ -6,8 +6,7 @@ import numpy as np
 import random
 import csv
 
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
 
 from pycocotools.coco import COCO
@@ -20,6 +19,8 @@ import cv2 as cv
 
 from PIL import Image
 from .settings import NUM_VARIABLES
+from retinanet import utils
+
 
 
 class CocoDataset(Dataset):
@@ -239,6 +240,15 @@ class CSVDataset(Dataset):
 
 #         return img.astype(np.float32)/255.0
 
+    def __active_status_string_to_int(self, str_status: str) -> utils.ActiveLabelMode:
+        if str_status == utils.ActiveLabelModeSTR.corrected.value:
+            int_status = utils.ActiveLabelMode.corrected.value
+        elif str_status == utils.ActiveLabelModeSTR.noisy.value:
+            int_status = utils.ActiveLabelMode.noisy.value
+        else:
+            raise AssertionError("truth_status field can be 'ground_truth' or 'predicted' ")
+        return int_status
+
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotation_list = self.image_data[self.image_names[image_index]]
@@ -279,9 +289,9 @@ class CSVDataset(Dataset):
             try:
                 if len(row) == 5:
                     img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
-                    truth_status = "ground_truth"
+                    label_status = utils.ActiveLabelModeSTR.corrected.value
                 elif len(row) > 5:
-                    img_id, ctr_x, ctr_y, alpha, class_name, truth_status = row[:6]
+                    img_id, ctr_x, ctr_y, alpha, class_name, label_status = row[:6]
                 else:
                     raise AssertionError("Annotation format is not correct.")
             except ValueError:
@@ -305,18 +315,7 @@ class CSVDataset(Dataset):
             alpha = self._parse(
                 float(alpha), int, 'line {}: malformed alpha: {{}}'.format(line))
 
-            if truth_status == "ground_truth":
-                is_ground_truth = True
-            elif truth_status == "predicted":
-                is_ground_truth = False
-            else:
-                raise AssertionError(
-                    "truth_status field can be 'ground_truth' or 'predicted' ")
-            # # Check that the bounding box is valid.
-            # if x2 <= x1:
-            #     raise ValueError('line {}: x2 ({}) must be higher than x1 ({})'.format(line, x2, x1))
-            # if y2 <= y1:
-            #     raise ValueError('line {}: y2 ({}) must be higher than y1 ({})'.format(line, y2, y1))
+            ground_truth = self.__active_status_string_to_int(label_status)
 
             # check if the current class name is correctly present
             if class_name not in classes:
@@ -324,7 +323,7 @@ class CSVDataset(Dataset):
                     line, class_name, classes))
 
             result[img_file].append(
-                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name, 'ground_truth': is_ground_truth})
+                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name, 'ground_truth': ground_truth})
         return result
 
     def name_to_label(self, name):
