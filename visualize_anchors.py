@@ -67,26 +67,61 @@ def main(args=None):
         image = (dataset.load_image(i) * 255).astype(np.int32)
         anots = dataset.load_annotations(i)
 
-        distance = calc_distance(torch.tensor(anchors[0, :, :]),
-                                 torch.tensor(anots[:, :NUM_VARIABLES]))
-        distance_min, distance_argmin = torch.min(
-            distance, dim=1)  # num_anchors x 1
+        dxy, dalpha = calc_distance(anchors[0, :, :],
+                                    anots[:, :NUM_VARIABLES])
 
-        targets = torch.ones((anchors.shape[1], 1)) * -1
+        dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
+
+        # compute the loss for classification
+        targets = torch.ones(anchors.shape[1], 1) * -1
+        if torch.cuda.is_available():
+            targets = targets.cuda()
+# -----------------------------------------------------------------------
+
         targets[torch.ge(
-            distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+            dxy_min, 1.3 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
-        positive_indices = torch.le(
-            distance_min, 11 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
+        targets[torch.ge(
+            dalpha[:, dxy_argmin], 1.3 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
+        positive_indices = torch.logical_and(
+            torch.le(
+                dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
+            torch.le(
+                dalpha[:, dxy_argmin], MAX_ANOT_ANCHOR_ANGLE_DISTANCE
+            )
+        )
+
+        d_argmin = positive_indices.nonzero(as_tuple=True)[0]
         num_positive_anchors = positive_indices.sum()
 
         # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
-        assigned_annotations = anots[distance_argmin, :]
+        assigned_annotations = anots[d_argmin, :]
 
         targets[positive_indices, :] = 0
         targets[positive_indices,
-                assigned_annotations[positive_indices, 3]] = 1
+                assigned_annotations[positive_indices, 3].long()] = 1
+
+        # distance = calc_distance(torch.tensor(anchors[0, :, :]),
+        #                          torch.tensor(anots[:, :NUM_VARIABLES]))
+        # distance_min, distance_argmin = torch.min(
+        #     distance, dim=1)  # num_anchors x 1
+
+        # targets = torch.ones((anchors.shape[1], 1)) * -1
+        # targets[torch.ge(
+        #     distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+
+        # positive_indices = torch.le(
+        #     distance_min, 11 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
+
+        # num_positive_anchors = positive_indices.sum()
+
+        # # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
+        # assigned_annotations = anots[distance_argmin, :]
+
+        # targets[positive_indices, :] = 0
+        # targets[positive_indices,
+        #         assigned_annotations[positive_indices, 3]] = 1
 
         _anchors = anchors[0, :, :]
         for anchor in _anchors[targets.squeeze() == 1]:
