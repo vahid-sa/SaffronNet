@@ -428,9 +428,15 @@ class Augmenter(object):
         super().__init__()
         ia.seed(3)
         self.seq = iaa.Sequential([
-            iaa.Affine(translate_px={"x": (10, 30)}, rotate=(-10, 10)),
+            iaa.Affine(
+                scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+                translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
+                rotate=(-25, 25),
+                shear=(-8, 8)
+            ),
+            iaa.Fliplr(0.5),  # horizontal flips
             # color jitter, only affects the image
-            iaa.AddToHueAndSaturation((-50, 50))
+            # iaa.AddToHueAndSaturation((-50, 50))
         ])
 
     def __call__(self, sample, aug=0.7):
@@ -441,13 +447,16 @@ class Augmenter(object):
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
-                x0, y0, x1, y1 = get_dots(x, y, alpha)
+                x0, y0, x1, y1 = get_dots(x, y, 90 - alpha, distance_thresh=60)
                 kps.append(Keypoint(x=x0, y=y0))
                 kps.append(Keypoint(x=x1, y=y1))
 
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
             image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
+            image_aug_copy = cv.cvtColor(
+                (image_aug.copy() * 255).astype(np.float32), cv.COLOR_BGR2RGB)
+
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -457,16 +466,14 @@ class Augmenter(object):
                 x1, y1 = kp.x, kp.y
 
                 alpha = get_alpha(x0, y0, x1, y1)
-                new_annots[i//2, :NUM_VARIABLES] = x0, y0, alpha
+                new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
 
-                image_aug = std_draw_points(
-                    image_aug, (x0, y0), (x1, y1))
+            for annot in new_annots:
+                image_aug_copy = std_draw_line(
+                    image_aug_copy, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Accept)
 
             cv.imwrite(
-                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image_aug)
-            # for annot in new_annots:
-            #     std_draw_line(
-            #         image_aug, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Raw)
+                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image_aug_copy)
 
             sample = {'img': image_aug, 'annot': new_annots}
 
