@@ -443,7 +443,11 @@ class Augmenter(object):
 
         if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
-            rows, cols, channels = image.shape
+            print('image: ', image.shape)
+            print('image: ', type(image))
+            print('image: ', np.max(image))
+            print('image: ', np.min(image))
+
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
@@ -454,8 +458,6 @@ class Augmenter(object):
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
             image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
-            image_aug_copy = cv.cvtColor(
-                (image_aug.copy() * 255).astype(np.float32), cv.COLOR_BGR2RGB)
 
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
@@ -468,13 +470,11 @@ class Augmenter(object):
                 alpha = get_alpha(x0, y0, x1, y1)
                 new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
 
-            for annot in new_annots:
-                image_aug_copy = std_draw_line(
-                    image_aug_copy, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Accept)
-
-            cv.imwrite(
-                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image_aug_copy)
-
+            print('image: ', image_aug.shape)
+            print('image: ', type(image_aug))
+            print('image: ', np.max(image_aug))
+            print('image: ', np.min(image_aug))
+            print('---------------------------')
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
