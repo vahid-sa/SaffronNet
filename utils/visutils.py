@@ -133,6 +133,26 @@ def draw_line(
     return img
 
 
+def std_draw_points(image: np.ndarray, point_0: POINT, point_1: POINT):
+    radius = 3
+    thickness = 3
+    image = cv.circle(
+        img=image,
+        center=point_0,
+        radius=radius,
+        color=ACC['CENTER'],
+        thickness=thickness)
+
+    image = cv.circle(
+        img=image,
+        center=point_1,
+        radius=radius,
+        color=RAW['CENTER'],
+        thickness=thickness)
+
+    return image
+
+
 def std_draw_line(image: np.ndarray, point: POINT, alpha: float, mode: DrawMode):
     if mode == DrawMode.Accept:
         line_color = ACC['LINE']

@@ -10,7 +10,7 @@ import csv
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
-from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line
+from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, std_draw_points
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from torch.utils.data.sampler import Sampler
@@ -459,12 +459,15 @@ class Augmenter(object):
                 alpha = get_alpha(x0, y0, x1, y1)
                 new_annots[i//2, :NUM_VARIABLES] = x0, y0, alpha
 
-            for annot in new_annots:
-                std_draw_line(
-                    image_aug, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Raw)
+                image_aug = std_draw_points(
+                    image_aug, (x0, y0), (x1, y1))
 
             cv.imwrite(
-                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image)
+                '/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(random.randint(1, 100)), image_aug)
+            # for annot in new_annots:
+            #     std_draw_line(
+            #         image_aug, (annot[0], annot[1]), alpha=90-annot[2], mode=DrawMode.Raw)
+
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
