@@ -272,7 +272,7 @@ class CSVDataset(Dataset):
             annotation[0, 2] = alpha
 
             annotation[0, 3] = self.name_to_label(a['class'])
-            annotations[0, 4] = ground_truth_status
+            annotation[0, 4] = ground_truth_status
             annotations = np.append(annotations, annotation, axis=0)
 
         return annotations
