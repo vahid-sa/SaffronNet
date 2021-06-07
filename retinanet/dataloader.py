@@ -443,11 +443,6 @@ class Augmenter(object):
 
         if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
-            print('image: ', image.shape)
-            print('image: ', type(image))
-            print('image: ', np.max(image))
-            print('image: ', np.min(image))
-
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
@@ -470,11 +465,6 @@ class Augmenter(object):
                 alpha = get_alpha(x0, y0, x1, y1)
                 new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
 
-            print('image: ', image_aug.shape)
-            print('image: ', type(image_aug))
-            print('image: ', np.max(image_aug))
-            print('image: ', np.min(image_aug))
-            print('---------------------------')
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
