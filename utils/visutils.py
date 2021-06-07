@@ -133,6 +133,26 @@ def draw_line(
     return img
 
 
+def std_draw_points(image: np.ndarray, point_0: POINT, point_1: POINT):
+    radius = 3
+    thickness = 3
+    image = cv.circle(
+        img=image,
+        center=point_0,
+        radius=radius,
+        color=ACC['CENTER'],
+        thickness=thickness)
+
+    image = cv.circle(
+        img=image,
+        center=point_1,
+        radius=radius,
+        color=RAW['CENTER'],
+        thickness=thickness)
+
+    return image
+
+
 def std_draw_line(image: np.ndarray, point: POINT, alpha: float, mode: DrawMode):
     if mode == DrawMode.Accept:
         line_color = ACC['LINE']
@@ -153,3 +173,19 @@ def std_draw_line(image: np.ndarray, point: POINT, alpha: float, mode: DrawMode)
         half_line=True,
         line_thickness=3
     )
+
+
+def normalize_alpha(alpha):
+    if alpha < 0:
+        return alpha + 360
+    if alpha > 360:
+        return alpha - 360
+    return alpha
+
+
+def get_alpha(x0, y0, x1, y1):
+    y = -1 * (y1 - y0)
+    x = x1 - x0
+
+    alpha = (np.arctan2(y, x) / math.pi) * 180
+    return normalize_alpha(alpha)

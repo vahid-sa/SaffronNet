@@ -1,11 +1,16 @@
 from __future__ import print_function, division
+import enum
 import sys
 import os
+from numpy.lib import NumpyVersion
 import torch
 import numpy as np
 import random
 import csv
-
+import imgaug as ia
+import imgaug.augmenters as iaa
+from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
+from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, std_draw_points
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from torch.utils.data.sampler import Sampler
@@ -15,6 +20,7 @@ from pycocotools.coco import COCO
 import skimage.io
 import skimage.transform
 import skimage.color
+import random
 import skimage
 import cv2 as cv
 
@@ -425,18 +431,48 @@ class Augmenter(object):
     """ #
     """
 
-    def __call__(self, sample, flip_x=0.5):
+    def __init__(self) -> None:
+        super().__init__()
+        ia.seed(3)
+        self.seq = iaa.Sequential([
+            iaa.Affine(
+                scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+                translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
+                rotate=(-25, 25),
+                shear=(-8, 8)
+            ),
+            iaa.Fliplr(0.5),  # horizontal flips
+            # color jitter, only affects the image
+            # iaa.AddToHueAndSaturation((-50, 50))
+        ])
 
-        if np.random.rand() < flip_x:
+    def __call__(self, sample, aug=0.7):
+
+        if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
-            image = image[:, ::-1, :]
+            new_annots = annots.copy()
+            kps = []
+            for x, y, alpha in annots[:, :NUM_VARIABLES]:
+                x0, y0, x1, y1 = get_dots(x, y, 90 - alpha, distance_thresh=60)
+                kps.append(Keypoint(x=x0, y=y0))
+                kps.append(Keypoint(x=x1, y=y1))
 
-            rows, cols, channels = image.shape
+            kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
-            x = annots[:, 0].copy()
-            annots[:, 0] = cols - x
+            image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
 
-            sample = {'img': image, 'annot': annots}
+            for i, _ in enumerate(kpsoi_aug.keypoints):
+                if i % 2 == 1:
+                    continue
+                kp = kpsoi_aug.keypoints[i]
+                x0, y0 = kp.x, kp.y
+                kp = kpsoi_aug.keypoints[i+1]
+                x1, y1 = kp.x, kp.y
+
+                alpha = get_alpha(x0, y0, x1, y1)
+                new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
+
+            sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
 
