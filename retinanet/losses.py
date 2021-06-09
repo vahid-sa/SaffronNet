@@ -224,6 +224,7 @@ class FocalLoss(nn.Module):
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
 
+            print('---------------------6')
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
             torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
             torch.stack(angle_distance_regression_losses).mean(
