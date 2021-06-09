@@ -190,7 +190,7 @@ def main(args=None):
 
                 print(
                     'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
-                        epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss), float(angle_distance_regression_losses), np.mean(loss)))
+                        epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss), float(angle_distance_regression_losses), loss))
 
                 del classification_loss
                 del xydistance_regression_loss
