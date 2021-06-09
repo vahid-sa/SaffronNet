@@ -67,8 +67,12 @@ def main(args=None):
         image = (dataset.load_image(i) * 255).astype(np.int32)
         anots = dataset.load_annotations(i)
 
-        dxy, dalpha = calc_distance(anchors[0, :, :],
-                                    anots[:, :NUM_VARIABLES])
+        anchors = torch.tensor(anchors)
+        anots = torch.tensor(anots)
+        if torch.cuda.is_available():
+            anchors = anchors.cuda()
+            anots = anots.cuda()
+        dxy, dalpha = calc_distance(anchors[0, :, :], anots[:, :NUM_VARIABLES])
 
         dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
@@ -79,29 +83,40 @@ def main(args=None):
 # -----------------------------------------------------------------------
 
         targets[torch.ge(
-            dxy_min, 1.3 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+            dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
+        print('dalpha.shape: ', dalpha.shape)
+        print('dxy_argmin.shape: ', dxy_argmin.shape)
+        print('dxy_min.shape: ', dxy_min.shape)
+        a = dalpha[range(dalpha.shape[0]), dxy_argmin]
+        print('a.shape: ', a.shape)
+        print('a: ', a[:20])
         targets[torch.ge(
-            dalpha[:, dxy_argmin], 1.3 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
+            a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
         positive_indices = torch.logical_and(
             torch.le(
                 dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
             torch.le(
-                dalpha[:, dxy_argmin], MAX_ANOT_ANCHOR_ANGLE_DISTANCE
+                a, MAX_ANOT_ANCHOR_ANGLE_DISTANCE
             )
         )
+        print('positive_indices.shape: ', positive_indices.shape)
 
         d_argmin = positive_indices.nonzero(as_tuple=True)[0]
+        d_argmin = dxy_argmin[d_argmin]
+
+        print('d_argmin.shape: ', d_argmin.shape)
+        print('d_argmin: ', d_argmin[:50])
         num_positive_anchors = positive_indices.sum()
 
         # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
         assigned_annotations = anots[d_argmin, :]
-
+        print('_anots: ', anots[:10])
         targets[positive_indices, :] = 0
         targets[positive_indices,
-                assigned_annotations[positive_indices, 3].long()] = 1
-
+                assigned_annotations[d_argmin, 3].long()] = 1
+        print('OK')
         # distance = calc_distance(torch.tensor(anchors[0, :, :]),
         #                          torch.tensor(anots[:, :NUM_VARIABLES]))
         # distance_min, distance_argmin = torch.min(
@@ -131,7 +146,8 @@ def main(args=None):
                 line_color=(0, 255, 0),
                 center_color=(0, 0, 255),
                 half_line=True,
-                distance_thresh=60
+                distance_thresh=40,
+                line_thickness=2
             )
         for anot in anots:
             x, y, alpha = anot[0], anot[1], 90 - anot[2]
