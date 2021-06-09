@@ -142,7 +142,7 @@ class FocalLoss(nn.Module):
             assigned_annotations = center_alpha_annotation[d_argmin, :]
             targets[positive_indices, :] = 0
             targets[positive_indices,
-                    assigned_annotations[d_argmin, 3].long()] = 1
+                    assigned_annotations[:, 3].long()] = 1
             print('---------------------5')
 
             if torch.cuda.is_available():
