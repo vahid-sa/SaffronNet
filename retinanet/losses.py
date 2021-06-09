@@ -128,6 +128,8 @@ class FocalLoss(nn.Module):
 
             num_positive_anchors = positive_indices.sum()
 
+            print('d_argmin.shape: ', d_argmin.shape)
+            print('d_argmin: ', d_argmin[:20])
             print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
