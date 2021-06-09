@@ -211,6 +211,8 @@ class FocalLoss(nn.Module):
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
+                print("-----------------6")
+
             else:
                 print("-----------------1")
                 if torch.cuda.is_available():
