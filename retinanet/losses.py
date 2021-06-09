@@ -101,8 +101,8 @@ class FocalLoss(nn.Module):
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
-            print('classification.shape: ', classification.shape)
-            print('anchors.shape: ', anchors.shape)
+            # print('classification.shape: ', classification.shape)
+            # print('anchors.shape: ', anchors.shape)
             targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
@@ -130,13 +130,13 @@ class FocalLoss(nn.Module):
 
             num_positive_anchors = positive_indices.sum()
 
-            print('d_argmin.shape: ', d_argmin.shape)
-            print('d_argmin: ', d_argmin[:20])
-            print('center_alpha_annotation: ', center_alpha_annotation[:20])
-            print('center_alpha_annotation.shape ',
-                  center_alpha_annotation.shape)
-            print('targets.shape: ', targets.shape)
-            print('positive_indices.shape: ', positive_indices.shape)
+            # print('d_argmin.shape: ', d_argmin.shape)
+            # print('d_argmin: ', d_argmin[:20])
+            # print('center_alpha_annotation: ', center_alpha_annotation[:20])
+            # print('center_alpha_annotation.shape ',
+            #   center_alpha_annotation.shape)
+            # print('targets.shape: ', targets.shape)
+            # print('positive_indices.shape: ', positive_indices.shape)
             print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
@@ -175,7 +175,7 @@ class FocalLoss(nn.Module):
             # compute the loss for regression
 
             if positive_indices.sum() > 0:
-                assigned_annotations = assigned_annotations[positive_indices, :]
+                assigned_annotations = assigned_annotations[d_argmin, :]
 
                 anchor_ctr_x_pi = anchor_ctr_x[positive_indices]
                 anchor_ctr_y_pi = anchor_ctr_y[positive_indices]
