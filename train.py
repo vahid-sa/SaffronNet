@@ -190,9 +190,10 @@ def main(args=None):
                 loss_hist.append(float(loss))
 
                 epoch_loss.append(float(loss))
-                epoch_CLASSIFICATION_loss.append(classification_loss)
-                epoch_XY_REG_loss.append(xydistance_regression_loss)
-                epoch_ANGLE_REG_loss.append(angle_distance_regression_losses)
+                epoch_CLASSIFICATION_loss.append(float(classification_loss))
+                epoch_XY_REG_loss.append(float(xydistance_regression_loss))
+                epoch_ANGLE_REG_loss.append(
+                    float(angle_distance_regression_losses))
                 print(
                     'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
                         epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss), float(angle_distance_regression_losses), loss))
