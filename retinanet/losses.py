@@ -75,75 +75,58 @@ class FocalLoss(nn.Module):
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
             if center_alpha_annotation.shape[0] == 0:
+                alpha_factor = torch.ones(classification.shape) * alpha
                 if torch.cuda.is_available():
-                    alpha_factor = torch.ones(
-                        classification.shape).cuda() * alpha
-
-                    alpha_factor = 1. - alpha_factor
-                    focal_weight = classification
-                    focal_weight = alpha_factor * \
-                        torch.pow(focal_weight, gamma)
-
-                    bce = -(torch.log(1.0 - classification))
-
-                    # cls_loss = focal_weight * torch.pow(bce, gamma)
-                    cls_loss = focal_weight * bce
-                    classification_losses.append(cls_loss.sum())
-                    regression_losses.append(torch.tensor(0).float())
-
-                else:
-                    alpha_factor = torch.ones(classification.shape) * alpha
-
-                    alpha_factor = 1. - alpha_factor
-                    focal_weight = classification
-                    focal_weight = alpha_factor * \
-                        torch.pow(focal_weight, gamma)
-
-                    bce = -(torch.log(1.0 - classification))
-
-                    # cls_loss = focal_weight * torch.pow(bce, gamma)
-                    cls_loss = focal_weight * bce
-                    classification_losses.append(cls_loss.sum())
-                    regression_losses.append(torch.tensor(0).float())
-
+                    alpha_factor = alpha_factor.cuda()
+                alpha_factor = 1. - alpha_factor
+                focal_weight = classification
+                focal_weight = alpha_factor * \
+                    torch.pow(focal_weight, gamma)
+                bce = -(torch.log(1.0 - classification))
+                # cls_loss = focal_weight * torch.pow(bce, gamma)
+                cls_loss = focal_weight * bce
+                classification_losses.append(cls_loss.sum())
+                z = torch.tensor(0).float()
+                if torch.cuda.is_available():
+                    z = z.cuda()
+                regression_losses.append(z)
                 continue
 
-            # num_anchors x num_annotations
-            dxy, dalpha = calc_distance(anchors[0, :, :],
-                                        center_alpha_annotation[:, :NUM_VARIABLES])
+            dxy, dalpha = calc_distance(
+                anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
 
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
-            targets = torch.ones(classification.shape) * -1
+            targets = torch.ones(anchors.shape[1], 1) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
-# -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------
 
             targets[torch.ge(
-                dxy_min, 1.3 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
+                dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
+            a = dalpha[range(dalpha.shape[0]), dxy_argmin]
             targets[torch.ge(
-                dalpha[:, dxy_argmin], 1.3 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
+                a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
             positive_indices = torch.logical_and(
                 torch.le(
                     dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
                 torch.le(
-                    dalpha[:, dxy_argmin], MAX_ANOT_ANCHOR_ANGLE_DISTANCE
-                )
-            )
+                    a, MAX_ANOT_ANCHOR_ANGLE_DISTANCE
+                ))
 
             d_argmin = positive_indices.nonzero(as_tuple=True)[0]
+            d_argmin = dxy_argmin[d_argmin]
+
             num_positive_anchors = positive_indices.sum()
 
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
-
             targets[positive_indices, :] = 0
             targets[positive_indices,
-                    assigned_annotations[positive_indices, 3].long()] = 1
-# -------------------------------------------------------------------------
+                    assigned_annotations[d_argmin, 3].long()] = 1
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
@@ -208,8 +191,7 @@ class FocalLoss(nn.Module):
                 regression_loss_xy = torch.where(
                     torch.le(regression_diff_xy, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
-                    regression_diff_xy - 0.5 / 9.0
-                )
+                    regression_diff_xy - 0.5 / 9.0)
                 regression_losses.append(
                     regression_loss_xy.mean() + regression_diff_angle.mean())
             else:
