@@ -101,6 +101,8 @@ class FocalLoss(nn.Module):
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
+            print('classification.shape: ', classification.shape)
+            print('anchors.shape: ', anchors.shape)
             targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
@@ -133,6 +135,8 @@ class FocalLoss(nn.Module):
             print('center_alpha_annotation: ', center_alpha_annotation[:20])
             print('center_alpha_annotation.shape ',
                   center_alpha_annotation.shape)
+            print('targets.shape: ', targets.shape)
+            print('positive_indices.shape: ', positive_indices.shape)
             print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
