@@ -127,16 +127,11 @@ class FocalLoss(nn.Module):
 
             d_argmin = positive_indices.nonzero(as_tuple=True)[0]
             d_argmin = dxy_argmin[d_argmin]
+            print('positive_indices: ', positive_indices.shape)
+            print('d_argmin: ', d_argmin.shape)
 
             num_positive_anchors = positive_indices.sum()
 
-            # print('d_argmin.shape: ', d_argmin.shape)
-            # print('d_argmin: ', d_argmin[:20])
-            # print('center_alpha_annotation: ', center_alpha_annotation[:20])
-            # print('center_alpha_annotation.shape ',
-            #   center_alpha_annotation.shape)
-            # print('targets.shape: ', targets.shape)
-            # print('positive_indices.shape: ', positive_indices.shape)
             print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
@@ -177,6 +172,9 @@ class FocalLoss(nn.Module):
             if positive_indices.sum() > 0:
                 assigned_annotations = assigned_annotations[d_argmin, :]
 
+                print('anchor_ctr_y.shape: ', anchor_ctr_y.shape)
+                print('assigned_annotations.shape: ',
+                      assigned_annotations.shape)
                 anchor_ctr_x_pi = anchor_ctr_x[positive_indices]
                 anchor_ctr_y_pi = anchor_ctr_y[positive_indices]
                 anchor_alpha_pi = anchor_alpha[positive_indices]
@@ -191,6 +189,7 @@ class FocalLoss(nn.Module):
 
                 targets = torch.stack(
                     (targets_dx, targets_dy, targets_dalpha))
+                print('targets.shape: ', targets.shape)
                 targets = targets.t()
                 if torch.cuda.is_available():
                     targets = targets / \
