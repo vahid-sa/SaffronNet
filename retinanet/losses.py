@@ -192,11 +192,15 @@ class FocalLoss(nn.Module):
                     (targets_dx, targets_dy, targets_dalpha))
                 targets = targets.t()
                 if torch.cuda.is_available():
+                    print("-----------------6")
                     targets = targets.cuda()
                     targets = targets / \
                         torch.Tensor([[1, 1, 1]]).cuda()
+                    print('------------------7')
                 else:
+                    print("-----------------8")
                     targets = targets/torch.Tensor([[1, 1, 1]])
+                    print("-----------------9")
 
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
@@ -211,7 +215,6 @@ class FocalLoss(nn.Module):
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
-                print("-----------------6")
 
             else:
                 print("-----------------1")
