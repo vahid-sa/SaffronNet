@@ -130,6 +130,9 @@ class FocalLoss(nn.Module):
 
             print('d_argmin.shape: ', d_argmin.shape)
             print('d_argmin: ', d_argmin[:20])
+            print('center_alpha_annotation: ', center_alpha_annotation[:20])
+            print('center_alpha_annotation.shape ',
+                  center_alpha_annotation.shape)
             print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
