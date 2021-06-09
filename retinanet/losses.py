@@ -175,7 +175,7 @@ class FocalLoss(nn.Module):
             # compute the loss for regression
 
             if positive_indices.sum() > 0:
-                assigned_annotations = assigned_annotations[d_argmin, :]
+                # assigned_annotations = assigned_annotations[d_argmin, :]
 
                 anchor_ctr_x_pi = anchor_ctr_x[positive_indices]
                 anchor_ctr_y_pi = anchor_ctr_y[positive_indices]
