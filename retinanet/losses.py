@@ -180,11 +180,6 @@ class FocalLoss(nn.Module):
                 anchor_ctr_x_pi = anchor_ctr_x[positive_indices]
                 anchor_ctr_y_pi = anchor_ctr_y[positive_indices]
                 anchor_alpha_pi = anchor_alpha[positive_indices]
-                print('positive_indices.shape: ', positive_indices.shape)
-                print('positive_indices: ', positive_indices[:10])
-                print('assigned_annotations.shape: ',
-                      assigned_annotations.shape)
-                print('assigned_annotations: ', assigned_annotations)
                 gt_ctr_x = assigned_annotations[:, 0]
                 gt_ctr_y = assigned_annotations[:, 1]
                 gt_alpha = assigned_annotations[:, 2]
@@ -197,11 +192,11 @@ class FocalLoss(nn.Module):
                     (targets_dx, targets_dy, targets_dalpha))
                 targets = targets.t()
                 if torch.cuda.is_available():
+                    targets = targets.cuda()
                     targets = targets / \
                         torch.Tensor([[1, 1, 1]]).cuda()
                 else:
                     targets = targets/torch.Tensor([[1, 1, 1]])
-                negative_indices = 1 + (~positive_indices)
 
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
@@ -217,16 +212,20 @@ class FocalLoss(nn.Module):
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
             else:
+                print("-----------------1")
                 if torch.cuda.is_available():
                     xydistance_regression_losses.append(
                         torch.tensor(0).float().cuda())
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float().cuda())
+                    print("-----------------2")
                 else:
+                    print("-----------------3")
                     xydistance_regression_losses.append(
                         torch.tensor(0).float())
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
+                    print("-----------------4")
 
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
             torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
