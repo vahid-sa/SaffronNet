@@ -97,14 +97,16 @@ class FocalLoss(nn.Module):
             dxy, dalpha = calc_distance(
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
 
+            print('---------------------0')
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
-            targets = torch.ones(anchors.shape[1], 1) * -1
+            targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
     # -----------------------------------------------------------------------
 
+            print('---------------------1')
             targets[torch.ge(
                 dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
@@ -112,23 +114,27 @@ class FocalLoss(nn.Module):
             targets[torch.ge(
                 a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
+            print('---------------------2')
             positive_indices = torch.logical_and(
                 torch.le(
                     dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
                 torch.le(
                     a, MAX_ANOT_ANCHOR_ANGLE_DISTANCE
                 ))
+            print('---------------------3')
 
             d_argmin = positive_indices.nonzero(as_tuple=True)[0]
             d_argmin = dxy_argmin[d_argmin]
 
             num_positive_anchors = positive_indices.sum()
 
+            print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
             targets[positive_indices, :] = 0
             targets[positive_indices,
                     assigned_annotations[d_argmin, 3].long()] = 1
+            print('---------------------5')
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
