@@ -159,21 +159,25 @@ def main(args=None):
         retinanet.module.freeze_bn()
 
         epoch_loss = []
+        epoch_CLASSIFICATION_loss = []
+        epoch_XY_REG_loss = []
+        epoch_ANGLE_REG_loss = []
 
         for iter_num, data in enumerate(dataloader_train):
             try:
                 optimizer.zero_grad()
                 if torch.cuda.is_available():
-                    classification_loss, regression_loss = retinanet(
+                    classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                         [data['img'].cuda().float(), data['annot']])
                 else:
-                    classification_loss, regression_loss = retinanet(
+                    classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                         [data['img'].float(), data['annot']])
-
                 classification_loss = classification_loss.mean()
-                regression_loss = regression_loss.mean()
+                xydistance_regression_loss = xydistance_regression_loss.mean()
+                angle_distance_regression_losses = angle_distance_regression_losses.mean()
 
-                loss = classification_loss + regression_loss
+                loss = classification_loss + xydistance_regression_loss + \
+                    angle_distance_regression_losses
 
                 if bool(loss == 0):
                     continue
@@ -187,13 +191,18 @@ def main(args=None):
                 loss_hist.append(float(loss))
 
                 epoch_loss.append(float(loss))
-
+                epoch_CLASSIFICATION_loss.append(float(classification_loss))
+                epoch_XY_REG_loss.append(float(xydistance_regression_loss))
+                epoch_ANGLE_REG_loss.append(
+                    float(angle_distance_regression_losses))
                 print(
-                    'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | Regression loss: {:1.5f} | Running loss: {:1.5f}'.format(
-                        epoch_num, iter_num, float(classification_loss), float(regression_loss), np.mean(epoch_loss)))
+                    'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
+                        epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss), float(angle_distance_regression_losses), loss))
 
                 del classification_loss
-                del regression_loss
+                del xydistance_regression_loss
+                del angle_distance_regression_losses
+
             except Exception as e:
                 print(e)
                 continue
@@ -240,8 +249,11 @@ def main(args=None):
                 torch.save(retinanet, os.path.join(os.path.dirname(
                     PATH), 'best_model_mAp_ready_to_eval.pt'))
 
-        log_history(epoch_num, {'loss': np.mean(epoch_loss), 'mAp': mAP}, os.path.join(
-            os.path.dirname(PATH), 'history.json'))
+        log_history(epoch_num,
+                    {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
+                     'rxy-loss': np.mean(epoch_XY_REG_loss),
+                     'ra-loss': np.mean(epoch_ANGLE_REG_loss),
+                     'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
 
     retinanet.eval()
