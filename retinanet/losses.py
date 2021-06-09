@@ -55,7 +55,8 @@ class FocalLoss(nn.Module):
         gamma = 2.0
         batch_size = classifications.shape[0]
         classification_losses = []
-        regression_losses = []
+        xydistance_regression_losses = []
+        angle_distance_regression_losses = []
 
         anchor = anchors[0, :, :]
 
@@ -89,7 +90,8 @@ class FocalLoss(nn.Module):
                 z = torch.tensor(0).float()
                 if torch.cuda.is_available():
                     z = z.cuda()
-                regression_losses.append(z)
+                xydistance_regression_losses.append(z)
+                angle_distance_regression_losses.append(z)
                 continue
 
             dxy, dalpha = calc_distance(
@@ -192,12 +194,22 @@ class FocalLoss(nn.Module):
                     torch.le(regression_diff_xy, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0)
-                regression_losses.append(
-                    regression_loss_xy.mean() + regression_diff_angle.mean())
+                xydistance_regression_losses.append(regression_loss_xy.mean())
+                angle_distance_regression_losses.append(
+                    regression_diff_angle.mean())
             else:
                 if torch.cuda.is_available():
-                    regression_losses.append(torch.tensor(0).float().cuda())
+                    xydistance_regression_losses.append(
+                        torch.tensor(0).float().cuda())
+                    angle_distance_regression_losses.append(
+                        torch.tensor(0).float().cuda())
                 else:
-                    regression_losses.append(torch.tensor(0).float())
+                    xydistance_regression_losses.append(
+                        torch.tensor(0).float())
+                    angle_distance_regression_losses.append(
+                        torch.tensor(0).float())
 
-        return torch.stack(classification_losses).mean(dim=0, keepdim=True), torch.stack(regression_losses).mean(dim=0, keepdim=True)
+        return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
+            torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
+            torch.stack(angle_distance_regression_losses).mean(
+                dim=0, keepdim=True)
