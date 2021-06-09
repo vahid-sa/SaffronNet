@@ -168,11 +168,6 @@ def main(args=None):
                 else:
                     classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                         [data['img'].float(), data['annot']])
-                print('classification_loss.shape: ', classification_loss.shape)
-                print('xydistance_regression_loss.shape: ',
-                      xydistance_regression_loss.shape)
-                print('angle_distance_regression_losses.shape: ',
-                      angle_distance_regression_losses.shape)
                 classification_loss = classification_loss.mean()
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()

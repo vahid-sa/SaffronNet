@@ -76,28 +76,41 @@ class FocalLoss(nn.Module):
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
 
             if center_alpha_annotation.shape[0] == 0:
-                alpha_factor = torch.ones(classification.shape) * alpha
                 if torch.cuda.is_available():
-                    alpha_factor = alpha_factor.cuda()
-                alpha_factor = 1. - alpha_factor
-                focal_weight = classification
-                focal_weight = alpha_factor * \
-                    torch.pow(focal_weight, gamma)
-                bce = -(torch.log(1.0 - classification))
-                # cls_loss = focal_weight * torch.pow(bce, gamma)
-                cls_loss = focal_weight * bce
-                classification_losses.append(cls_loss.sum())
-                z = torch.tensor(0).float()
-                if torch.cuda.is_available():
-                    z = z.cuda()
-                xydistance_regression_losses.append(z)
-                angle_distance_regression_losses.append(z)
+                    alpha_factor = torch.ones(
+                        classification.shape).cuda() * alpha
+                    alpha_factor = 1. - alpha_factor
+                    focal_weight = classification
+                    focal_weight = alpha_factor * \
+                        torch.pow(focal_weight, gamma)
+                    bce = -(torch.log(1.0 - classification))
+                    # cls_loss = focal_weight * torch.pow(bce, gamma)
+                    cls_loss = focal_weight * bce
+                    classification_losses.append(cls_loss.sum())
+                    xydistance_regression_losses.append(
+                        torch.tensor(0).float().cuda())
+                    angle_distance_regression_losses.append(
+                        torch.tensor(0).float().cuda())
+                else:
+                    alpha_factor = torch.ones(
+                        classification.shape) * alpha
+                    alpha_factor = 1. - alpha_factor
+                    focal_weight = classification
+                    focal_weight = alpha_factor * \
+                        torch.pow(focal_weight, gamma)
+                    bce = -(torch.log(1.0 - classification))
+                    # cls_loss = focal_weight * torch.pow(bce, gamma)
+                    cls_loss = focal_weight * bce
+                    classification_losses.append(cls_loss.sum())
+                    xydistance_regression_losses.append(
+                        torch.tensor(0).float())
+                    angle_distance_regression_losses.append(
+                        torch.tensor(0).float())
                 continue
 
             dxy, dalpha = calc_distance(
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
 
-            print('---------------------0')
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
 
             # compute the loss for classification
@@ -108,7 +121,6 @@ class FocalLoss(nn.Module):
                 targets = targets.cuda()
     # -----------------------------------------------------------------------
 
-            print('---------------------1')
             targets[torch.ge(
                 dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
 
@@ -116,29 +128,22 @@ class FocalLoss(nn.Module):
             targets[torch.ge(
                 a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
-            print('---------------------2')
             positive_indices = torch.logical_and(
                 torch.le(
                     dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
                 torch.le(
                     a, MAX_ANOT_ANCHOR_ANGLE_DISTANCE
                 ))
-            print('---------------------3')
 
             d_argmin = positive_indices.nonzero(as_tuple=True)[0]
             d_argmin = dxy_argmin[d_argmin]
-            print('positive_indices: ', positive_indices.shape)
-            print('d_argmin: ', d_argmin.shape)
-
             num_positive_anchors = positive_indices.sum()
 
-            print('---------------------4')
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
             targets[positive_indices, :] = 0
             targets[positive_indices,
                     assigned_annotations[:, 3].long()] = 1
-            print('---------------------5')
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
@@ -172,13 +177,14 @@ class FocalLoss(nn.Module):
             if positive_indices.sum() > 0:
                 assigned_annotations = assigned_annotations[d_argmin, :]
 
-                print('anchor_ctr_y.shape: ', anchor_ctr_y.shape)
-                print('assigned_annotations.shape: ',
-                      assigned_annotations.shape)
                 anchor_ctr_x_pi = anchor_ctr_x[positive_indices]
                 anchor_ctr_y_pi = anchor_ctr_y[positive_indices]
                 anchor_alpha_pi = anchor_alpha[positive_indices]
-
+                print('positive_indices.shape: ', positive_indices.shape)
+                print('positive_indices: ', positive_indices[:10])
+                print('assigned_annotations.shape: ',
+                      assigned_annotations.shape)
+                print('assigned_annotations: ', assigned_annotations)
                 gt_ctr_x = assigned_annotations[:, 0]
                 gt_ctr_y = assigned_annotations[:, 1]
                 gt_alpha = assigned_annotations[:, 2]
@@ -189,7 +195,6 @@ class FocalLoss(nn.Module):
 
                 targets = torch.stack(
                     (targets_dx, targets_dy, targets_dalpha))
-                print('targets.shape: ', targets.shape)
                 targets = targets.t()
                 if torch.cuda.is_available():
                     targets = targets / \
@@ -223,7 +228,6 @@ class FocalLoss(nn.Module):
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
 
-            print('---------------------6')
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
             torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
             torch.stack(angle_distance_regression_losses).mean(
