@@ -158,6 +158,9 @@ def main(args=None):
         retinanet.module.freeze_bn()
 
         epoch_loss = []
+        epoch_CLASSIFICATION_loss = []
+        epoch_XY_REG_loss = []
+        epoch_ANGLE_REG_loss = []
 
         for iter_num, data in enumerate(dataloader_train):
             try:
@@ -187,7 +190,9 @@ def main(args=None):
                 loss_hist.append(float(loss))
 
                 epoch_loss.append(float(loss))
-
+                epoch_CLASSIFICATION_loss.append(classification_loss)
+                epoch_XY_REG_loss.append(xydistance_regression_loss)
+                epoch_ANGLE_REG_loss.append(angle_distance_regression_losses)
                 print(
                     'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
                         epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss), float(angle_distance_regression_losses), loss))
@@ -242,8 +247,11 @@ def main(args=None):
                 torch.save(retinanet, os.path.join(os.path.dirname(
                     PATH), 'best_model_mAp_ready_to_eval.pt'))
 
-        log_history(epoch_num, {'loss': np.mean(epoch_loss), 'mAp': mAP}, os.path.join(
-            os.path.dirname(PATH), 'history.json'))
+        log_history(epoch_num,
+                    {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
+                     'rxy-loss': np.mean(epoch_XY_REG_loss),
+                     'ra-loss': np.mean(epoch_ANGLE_REG_loss),
+                     'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
 
     retinanet.eval()
