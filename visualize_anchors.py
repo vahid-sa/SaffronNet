@@ -114,6 +114,10 @@ def main(args=None):
         assigned_annotations = anots[d_argmin, :]
         print('_anots: ', anots[:10])
         targets[positive_indices, :] = 0
+        print('positive_indices.shape: ', positive_indices.shape)
+        print('assigned_annotations.shape: ', assigned_annotations.shape)
+        print('targets.shape: ', targets.shape)
+
         targets[positive_indices,
                 assigned_annotations[d_argmin, 3].long()] = 1
         print('OK')
