@@ -7,17 +7,15 @@ import torch
 import numpy as np
 import random
 import csv
-<<<<<<< HEAD
 
 from torch.utils.data import Dataset
-=======
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
 from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, std_draw_points
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
->>>>>>> dev
+
 from torch.utils.data.sampler import Sampler
 
 from pycocotools.coco import COCO
