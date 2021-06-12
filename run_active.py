@@ -159,7 +159,15 @@ labeling.write_corrected_boxes(
 
 
 # boxes = np.concatenate([gt_boxes, uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
+<<<<<<< HEAD
 # boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
 # boxes = boxes[boxes[:, NAME].argsort()]
 # assert osp.isdir(args.output_dir), "Output directory does not exist."
 # visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir = args.output_dir)
+=======
+boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
+boxes = boxes[boxes[:, NAME].argsort()]
+assert osp.isdir(args.output_dir), "Output directory does not exist."
+visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir=args.output_dir)
+
+>>>>>>> dev
