@@ -136,6 +136,7 @@ class FocalLoss(nn.Module):
                 ))
 
             d_argmin = positive_indices.nonzero(as_tuple=True)[0]
+            assigned_annotations_indices_in_all = d_argmin.copy()
             d_argmin = dxy_argmin[d_argmin]
             num_positive_anchors = positive_indices.sum()
 
@@ -150,7 +151,8 @@ class FocalLoss(nn.Module):
                 dampening_factor = dampening_factor.cuda()
             dampening_factor[targets == -1] = 1
             # unset dampening factor for ground truth
-            dampening_factor[assigned_annotations[:, 4].long() == 1, :] = 1
+            center_alpha_annotation[:, 4] == 1 and positive_indices
+            dampening_factor[dxy_argmin[positive_indices], :]
 
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
