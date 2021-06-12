@@ -10,7 +10,7 @@ import csv
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
-from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, std_draw_points
+from utils.visutils import DrawMode, draw_line, get_alpha, get_dots, std_draw_line, std_draw_points, normalize_alpha
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 from torch.utils.data.sampler import Sampler
@@ -430,9 +430,9 @@ class Augmenter(object):
         self.seq = iaa.Sequential([
             iaa.Affine(
                 scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
-                translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
-                rotate=(-25, 25),
-                shear=(-8, 8)
+                translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+                rotate=(-15, 15),
+                shear=(-4, 4)
             ),
             iaa.Fliplr(0.5),  # horizontal flips
             # color jitter, only affects the image
@@ -453,7 +453,7 @@ class Augmenter(object):
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
             image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
-
+            # imgaug_copy = image_aug.copy()
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -463,8 +463,11 @@ class Augmenter(object):
                 x1, y1 = kp.x, kp.y
 
                 alpha = get_alpha(x0, y0, x1, y1)
-                new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
-
+                new_annots[i//2,
+                           :NUM_VARIABLES] = x0, y0, normalize_alpha(90 - alpha)
+                # imgaug_copy = std_draw_line(imgaug_copy, point=(x0, y0),
+                #                             alpha=90 - new_annots[i//2, 2], mode=DrawMode.Accept)
+            # cv.imwrite('path', imgaug_copy)
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
