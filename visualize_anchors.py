@@ -114,33 +114,9 @@ def main(args=None):
         assigned_annotations = anots[d_argmin, :]
         print('_anots: ', anots[:10])
         targets[positive_indices, :] = 0
-        print('positive_indices.shape: ', positive_indices.shape)
-        print('assigned_annotations.shape: ', assigned_annotations.shape)
-        print('targets.shape: ', targets.shape)
 
         targets[positive_indices,
                 assigned_annotations[d_argmin, 3].long()] = 1
-        print('OK')
-        # distance = calc_distance(torch.tensor(anchors[0, :, :]),
-        #                          torch.tensor(anots[:, :NUM_VARIABLES]))
-        # distance_min, distance_argmin = torch.min(
-        #     distance, dim=1)  # num_anchors x 1
-
-        # targets = torch.ones((anchors.shape[1], 1)) * -1
-        # targets[torch.ge(
-        #     distance_min, 13 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
-
-        # positive_indices = torch.le(
-        #     distance_min, 11 * MAX_ANOT_ANCHOR_POSITION_DISTANCE)
-
-        # num_positive_anchors = positive_indices.sum()
-
-        # # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
-        # assigned_annotations = anots[distance_argmin, :]
-
-        # targets[positive_indices, :] = 0
-        # targets[positive_indices,
-        #         assigned_annotations[positive_indices, 3]] = 1
 
         _anchors = anchors[0, :, :]
         for anchor in _anchors[targets.squeeze() == 1]:
