@@ -5,6 +5,7 @@ import csv
 import os
 from os import path as osp
 import argparse
+from typing import Tuple
 import collections
 from math import inf
 import torch.optim as optim
@@ -156,17 +157,29 @@ labeling.write_corrected_boxes(
     class_dict=index_to_class,
 )
 
-
-
-# boxes = np.concatenate([gt_boxes, uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
-
-# boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
-# boxes = boxes[boxes[:, NAME].argsort()]
-# assert osp.isdir(args.output_dir), "Output directory does not exist."
-# visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir = args.output_dir)
-
 boxes = np.concatenate([uncertain_boxes, noisy_boxes, corrected_boxes], axis=0)
 boxes = boxes[boxes[:, NAME].argsort()]
 
 assert osp.isdir(args.output_dir), "Output directory does not exist."
 visualize.draw_noisy_uncertain_gt(loader=loader, detections=boxes, images_dir=args.image_dir, output_dir=args.output_dir)
+
+
+def get_uncertain_and_noisy_boxes(
+        previous_cycle_model_path: str,
+        loader: imageloader.CSVDataset,
+        corrected_box_annotations_path: str,
+) -> Tuple[np.array, np.array]:
+
+    model = torch.load(previous_cycle_model_path)
+    pred_boxes = detect(dataset=loader, retinanet=model)
+    if osp.isfile(corrected_box_annotations_path):
+        previous_corrected_annotations = load_annotations(corrected_box_annotations_path)
+        previous_corrected_names = previous_corrected_annotations[:, NAME]
+    else:
+        previous_corrected_names = np.array(list(), dtype=pred_boxes.dtype)
+    uncertain_boxes, noisy_boxes = predict_boxes.split_uncertain_and_noisy(
+        boxes=pred_boxes,
+        previous_corrected_boxes_names=previous_corrected_names,
+    )
+    return uncertain_boxes, noisy_boxes
+
