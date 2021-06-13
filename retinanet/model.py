@@ -275,7 +275,6 @@ class ResNet(nn.Module):
         x2 = self.layer2(x1)
         # x3 = self.layer3(x2)
         # x4 = self.layer4(x3)
-
         regression = self.regressionModel(x2)
         classification = self.classificationModel(x2)
         anchors = self.anchors(img_batch)
@@ -322,7 +321,6 @@ class ResNet(nn.Module):
                 finalResult[1].extend(torch.tensor(
                     [i] * anchors_nms_idx.shape[0]))
                 finalResult[2].extend(anchorBoxes[anchors_nms_idx])
-
                 finalScores = torch.cat(
                     (finalScores, scores[anchors_nms_idx]))
                 finalAnchorBoxesIndexesValue = torch.tensor(
@@ -334,7 +332,6 @@ class ResNet(nn.Module):
                     (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
                 finalAnchorBoxesCoordinates = torch.cat(
                     (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
-
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
 
