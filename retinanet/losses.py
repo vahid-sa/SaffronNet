@@ -174,7 +174,7 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
-            cls_loss *= dampening_factor
+            # cls_loss *= dampening_factor
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
