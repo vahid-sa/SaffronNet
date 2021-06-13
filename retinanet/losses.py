@@ -150,6 +150,7 @@ class FocalLoss(nn.Module):
             accepted_annotations_indices = dxy_argmin[positive_indices]
             accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
             print("accepted_annotations_status.shape", accepted_annotations_status.shape)
+            dampening_factor[positive_indices] = np.where(accepted_annotations_status == 1, 1, DAMPENING_PARAMETER)
             # unset dampening factor for ground truth
             # center_alpha_annotation[:, 4] == 1 and positive_indices
             # dampening_factor[dxy_argmin[positive_indices], :]
