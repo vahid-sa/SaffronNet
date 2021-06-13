@@ -148,6 +148,7 @@ class FocalLoss(nn.Module):
                 dampening_factor = dampening_factor.cuda()
             # dampening_factor[targets_max == -1] = 1
             accepted_assigned_annotations = annotations[:, dxy_argmin[positive_indices], -1]
+            print("accepted_assigned_annotations.shape", accepted_assigned_annotations.shape)
 
             # unset dampening factor for ground truth
             # center_alpha_annotation[:, 4] == 1 and positive_indices
