@@ -262,7 +262,7 @@ class CSVDataset(Dataset):
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotation_list = self.image_data[self.image_names[image_index]]
-        annotations = np.zeros((0, NUM_VARIABLES+1))
+        annotations = np.zeros((0, NUM_VARIABLES+2))
 
         # some images appear to miss annotations (like image with id 257034)
         if len(annotation_list) == 0:
@@ -374,7 +374,7 @@ def collater(data):
     if max_num_annots > 0:
 
         annot_padded = torch.ones(
-            (len(annots), max_num_annots, NUM_VARIABLES+1)) * -1
+            (len(annots), max_num_annots, NUM_VARIABLES+2)) * -1
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):
@@ -382,7 +382,7 @@ def collater(data):
                 if annot.shape[0] > 0:
                     annot_padded[idx, :annot.shape[0], :] = annot
     else:
-        annot_padded = torch.ones((len(annots), 1, NUM_VARIABLES+1)) * -1
+        annot_padded = torch.ones((len(annots), 1, NUM_VARIABLES+2)) * -1
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
 
