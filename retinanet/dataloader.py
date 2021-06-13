@@ -428,12 +428,12 @@ class Augmenter(object):
         super().__init__()
         ia.seed(3)
         self.seq = iaa.Sequential([
-            iaa.Affine(
-                scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
-                translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
-                rotate=(-15, 15),
-                shear=(-4, 4)
-            ),
+            # iaa.Affine(
+            #     scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+            #     translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+            #     rotate=(-15, 15),
+            #     shear=(-4, 4)
+            # ),
             iaa.Fliplr(0.5),  # horizontal flips
             # color jitter, only affects the image
             # iaa.AddToHueAndSaturation((-50, 50))
@@ -446,14 +446,14 @@ class Augmenter(object):
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
-                x0, y0, x1, y1 = get_dots(x, y, 90 - alpha, distance_thresh=60)
+                x0, y0, x1, y1 = get_dots(x, y, alpha, distance_thresh=60)
                 kps.append(Keypoint(x=x0, y=y0))
                 kps.append(Keypoint(x=x1, y=y1))
 
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
             image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
-            # imgaug_copy = image_aug.copy()
+            imgaug_copy = image_aug.copy()
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -464,7 +464,7 @@ class Augmenter(object):
 
                 alpha = get_alpha(x0, y0, x1, y1)
                 new_annots[i//2,
-                           :NUM_VARIABLES] = x0, y0, normalize_alpha(90 - alpha)
+                           :NUM_VARIABLES] = x0, y0, alpha
 
             x_in_bound = np.logical_and(
                 new_annots[:, 0] > 0, new_annots[:, 0] < image_aug.shape[1])
@@ -473,9 +473,14 @@ class Augmenter(object):
             in_bound = np.logical_and(x_in_bound, y_in_bound)
 
             new_annots = new_annots[in_bound, :]
-            # imgaug_copy = std_draw_line(imgaug_copy, point=(x0, y0),
-            #                             alpha=90 - new_annots[i//2, 2], mode=DrawMode.Accept)
-            # cv.imwrite('path', imgaug_copy)
+            for x, y, alpha, _ in new_annots:
+                imgaug_copy = std_draw_line(
+                    imgaug_copy,
+                    point=(x, y),
+                    alpha=90 - alpha,
+                    mode=DrawMode.Accept
+                )
+            cv.imwrite('path', imgaug_copy)
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
