@@ -243,6 +243,126 @@ class Training:
         else:
             retinanet = torch.nn.DataParallel(retinanet)
 
+        optimizer = optim.Adam(retinanet.parameters(), lr=1e-5)
+
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, patience=3, verbose=True)
+        checkpoint = torch.load(state_dict_path)
+        retinanet.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
+        retinanet.train()
+        retinanet.module.freeze_bn()
+
+        print('Num training images: {}'.format(len(dataset_train)))
+        loss_hist = []
+        for epoch_num in range(parser.epochs):
+
+            retinanet.train()
+            retinanet.module.freeze_bn()
+
+            epoch_loss = []
+            epoch_CLASSIFICATION_loss = []
+            epoch_XY_REG_loss = []
+            epoch_ANGLE_REG_loss = []
+
+            for iter_num, data in enumerate(dataloader_train):
+                try:
+                    optimizer.zero_grad()
+                    if torch.cuda.is_available():
+                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
+                            [data['img'].cuda().float(), data['annot']])
+                    else:
+                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
+                            [data['img'].float(), data['annot']])
+                    classification_loss = classification_loss.mean()
+                    xydistance_regression_loss = xydistance_regression_loss.mean()
+                    angle_distance_regression_losses = angle_distance_regression_losses.mean()
+
+                    loss = classification_loss + xydistance_regression_loss + \
+                           angle_distance_regression_losses
+
+                    if bool(loss == 0):
+                        continue
+
+                    loss.backward()
+
+                    torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
+
+                    optimizer.step()
+
+                    loss_hist.append(float(loss))
+
+                    epoch_loss.append(float(loss))
+                    epoch_CLASSIFICATION_loss.append(float(classification_loss))
+                    epoch_XY_REG_loss.append(float(xydistance_regression_loss))
+                    epoch_ANGLE_REG_loss.append(
+                        float(angle_distance_regression_losses))
+                    print(
+                        'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
+                            epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss),
+                            float(angle_distance_regression_losses), loss))
+
+                    del classification_loss
+                    del xydistance_regression_loss
+                    del angle_distance_regression_losses
+
+                except Exception as e:
+                    print(e)
+                    continue
+
+            mAP = None
+            mean_epoch_loss = np.mean(epoch_loss)
+            print('Evaluating dataset')
+            if min_loss > mean_epoch_loss:
+                print("loss improved from from {} to {}".format(
+                    min_loss, mean_epoch_loss))
+                min_loss = mean_epoch_loss
+                if parser.save_dir:
+                    PATH = os.path.join(parser.save_dir, 'best_model_loss.pt')
+                else:
+                    PATH = 'best_model_loss.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
+                }, PATH)
+
+            mAP = csv_eval.evaluate(self.dataset_val, retinanet)
+            if mAP[0][0] > max_mAp:
+                print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
+                max_mAp = mAP[0][0]
+                if parser.save_dir:
+                    PATH = os.path.join(parser.save_dir, 'best_model_mAp.pt')
+                else:
+                    PATH = 'best_model_mAp.pt'
+                torch.save({
+                    'epoch': epoch_num,
+                    'model_state_dict': retinanet.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': scheduler.state_dict(),
+                    'loss': np.mean(epoch_loss),
+                    'mAp': max_mAp
+                }, PATH)
+                torch.save(retinanet, os.path.join(os.path.dirname(
+                    PATH), 'best_model_mAp_ready_to_eval.pt'))
+
+            log_history(epoch_num,
+                        {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
+                         'rxy-loss': np.mean(epoch_XY_REG_loss),
+                         'ra-loss': np.mean(epoch_ANGLE_REG_loss),
+                         'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
+            scheduler.step(np.mean(epoch_loss))
+
+        retinanet.eval()
+        if parser.save_dir:
+            torch.save(retinanet, os.path.join(parser.save_dir, 'model_final.pt'))
+        else:
+            torch.save(retinanet, 'model_final.pt')
+
 
 
 
