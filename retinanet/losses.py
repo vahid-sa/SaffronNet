@@ -154,7 +154,7 @@ class FocalLoss(nn.Module):
             dampening_factor[positive_indices] = torch.where(
                 accepted_annotations_status == 1,
                 torch.ones(
-                    shape=dampening_factor[positive_indices],
+                    shape=dampening_factor[positive_indices].shape,
                     dtype=dampening_factor.dtype,
                     device=dampening_factor.device),
                 dampening_factor[positive_indices])
