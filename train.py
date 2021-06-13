@@ -152,9 +152,7 @@ def main(args=None):
     retinanet.module.freeze_bn()
 
     print('Num training images: {}'.format(len(dataset_train)))
-
     for epoch_num in range(parser.epochs):
-
         retinanet.train()
         retinanet.module.freeze_bn()
 
@@ -162,7 +160,6 @@ def main(args=None):
         epoch_CLASSIFICATION_loss = []
         epoch_XY_REG_loss = []
         epoch_ANGLE_REG_loss = []
-
         for iter_num, data in enumerate(dataloader_train):
             try:
                 optimizer.zero_grad()
@@ -172,6 +169,7 @@ def main(args=None):
                 else:
                     classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                         [data['img'].float(), data['annot']])
+
                 classification_loss = classification_loss.mean()
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
@@ -206,7 +204,6 @@ def main(args=None):
             except Exception as e:
                 print(e)
                 continue
-
         mAP = None
         if parser.dataset == 'coco':
             print('Evaluating dataset')
@@ -229,7 +226,6 @@ def main(args=None):
                     'scheduler_state_dict': scheduler.state_dict(),
                     'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
                 }, PATH)
-
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
@@ -255,7 +251,6 @@ def main(args=None):
                      'ra-loss': np.mean(epoch_ANGLE_REG_loss),
                      'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
-
     retinanet.eval()
     if parser.save_dir:
         torch.save(retinanet, os.path.join(parser.save_dir, 'model_final.pt'))
