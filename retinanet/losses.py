@@ -144,20 +144,16 @@ class FocalLoss(nn.Module):
             dampening_factor = torch.full(size=(targets.shape[0], ), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
             targets_max = targets.max(axis=1)
 
-            if torch.cuda.is_available():
-                dampening_factor = dampening_factor.cuda()
+            # if torch.cuda.is_available():
+            #     dampening_factor = dampening_factor.cuda()
             # dampening_factor[targets_max == -1] = 1
             accepted_annotations_indices = dxy_argmin[positive_indices]
             accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
+            print("LOSS1")
+            dampening_factor[positive_indices] = torch.where(accepted_annotations_status == 1, 1, DAMPENING_PARAMETER)
+            print("LOSS2")
 
             print("accepted_annotations_status", accepted_annotations_status.shape, accepted_annotations_status.dtype)
-            dampening_factor[positive_indices] = torch.where(
-                accepted_annotations_status == 1,
-                torch.ones(
-                    shape=dampening_factor[positive_indices].shape,
-                    dtype=dampening_factor.dtype,
-                    device=dampening_factor.device),
-                dampening_factor[positive_indices])
             # unset dampening factor for ground truth
             # center_alpha_annotation[:, 4] == 1 and positive_indices
             # dampening_factor[dxy_argmin[positive_indices], :]
