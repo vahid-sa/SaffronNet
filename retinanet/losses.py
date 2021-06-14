@@ -212,7 +212,7 @@ class FocalLoss(nn.Module):
                     regression_diff_xy - 0.5 / 9.0)
                 print("regression_loss_xy", regression_loss_xy.shape, regression_loss_xy.dtype)
                 print("regression_diff_angle", regression_diff_angle.shape, regression_diff_angle.dtype)
-                regression_loss_xy *= dampening_factor[positive_indices]
+                regression_loss_xy *= torch.unsqueeze(dampening_factor[positive_indices], dim=1)
                 regression_diff_angle *= dampening_factor[positive_indices]
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
