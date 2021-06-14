@@ -51,7 +51,6 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
-        print("annotations.shape", annotations.shape)
         alpha = 0.25
         gamma = 2.0
         batch_size = classifications.shape[0]
@@ -109,8 +108,6 @@ class FocalLoss(nn.Module):
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
             # compute the loss for classification
-            # print('classification.shape: ', classification.shape)
-            # print('anchors.shape: ', anchors.shape)
             targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
                 targets = targets.cuda()
@@ -152,7 +149,6 @@ class FocalLoss(nn.Module):
             accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
             dampening_factor[positive_indices] = torch.where(accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
 
-            print("accepted_annotations_status", accepted_annotations_status.shape, accepted_annotations_status.dtype)
             # unset dampening factor for ground truth
             # center_alpha_annotation[:, 4] == 1 and positive_indices
             # dampening_factor[dxy_argmin[positive_indices], :]
