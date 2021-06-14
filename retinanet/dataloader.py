@@ -259,7 +259,7 @@ class CSVDataset(Dataset):
             # some annotations have basically no width / height, skip them
             ctr_x = a['x']
             ctr_y = a['y']
-            alpha = a['alpha']
+            alpha = normalize_alpha(90 - a['alpha'])
 
             # if (x2-x1) < 1 or (y2-y1) < 1:
             #     continue
@@ -428,12 +428,12 @@ class Augmenter(object):
         super().__init__()
         ia.seed(3)
         self.seq = iaa.Sequential([
-            # iaa.Affine(
-            #     scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
-            #     translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
-            #     rotate=(-15, 15),
-            #     shear=(-4, 4)
-            # ),
+            iaa.Affine(
+                scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+                translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+                rotate=(-15, 15),
+                shear=(-4, 4)
+            ),
             iaa.Fliplr(0.5),  # horizontal flips
             # color jitter, only affects the image
             # iaa.AddToHueAndSaturation((-50, 50))
@@ -477,10 +477,11 @@ class Augmenter(object):
                 imgaug_copy = std_draw_line(
                     imgaug_copy,
                     point=(x, y),
-                    alpha=90 - alpha,
+                    alpha=alpha,
                     mode=DrawMode.Accept
                 )
-            cv.imwrite('path', imgaug_copy)
+            cv.imwrite('/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(
+                np.random.randint(0, 1000)), imgaug_copy)
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample
