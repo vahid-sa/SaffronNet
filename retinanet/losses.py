@@ -143,10 +143,12 @@ class FocalLoss(nn.Module):
             # -------------------------------------------------------------------------
             dampening_factor = torch.full(size=(targets.shape[0], ), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
             targets_max = targets.max(axis=1)
-
             if torch.cuda.is_available():
                 dampening_factor = dampening_factor.cuda()
-            dampening_factor[targets_max == -1] = 1
+            ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
+            assert torch.logical_and(ignored_background.cuda(), positive_indices).sum() == 0.0, "ASSERT ERROR"
+            dampening_factor[targets_max == -1] = 1.0
+            dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
             accepted_annotations_indices = dxy_argmin[positive_indices]
             accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
             dampening_factor[positive_indices] = torch.where(accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
@@ -177,7 +179,7 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
-            # cls_loss *= dampening_factor
+            cls_loss *= dampening_factor
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
