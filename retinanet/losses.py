@@ -193,6 +193,9 @@ class FocalLoss(nn.Module):
                 targets = torch.stack(
                     (targets_dx, targets_dy, targets_dalpha))
                 targets = targets.t()
+                print("targets", targets.shape)
+                print("assigned_annotations", assigned_annotations.shape)
+                print("positive_indices", positive_indices.sum())
                 if torch.cuda.is_available():
                     targets = targets.cuda()
                     targets = targets / \
