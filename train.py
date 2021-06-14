@@ -22,6 +22,30 @@ assert torch.__version__.split('.')[0] == '1'
 print('CUDA available: {}'.format(torch.cuda.is_available()))
 
 
+def save_models(model_path: str,
+                state_dict_path: str,
+                model,
+                optimizer=None,
+                scheduler=None,
+                loss=None,
+                mAP=None,
+                epoch=None):
+    state_dict = {"model_state_dict": model.state_dict(), }
+    if optimizer is not None:
+        state_dict['optimizer_state_dict'] = optimizer.state_dict()
+    if scheduler is not None:
+        state_dict["scheduler_state_dict"] = scheduler.state_dict()
+    if loss is not None:
+        state_dict["loss"] = loss
+    if mAP is not None:
+        state_dict["mAP"] = mAP
+    if epoch is not None:
+        state_dict["epoch"] = epoch
+
+    torch.save(model, model_path)
+    torch.save(state_dict, state_dict_path)
+
+
 def main(args=None):
     max_mAp = 0
     min_loss = inf
@@ -215,48 +239,42 @@ def main(args=None):
                 print("loss improved from from {} to {}".format(
                     min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
-                if parser.save_dir:
-                    PATH = os.path.join(parser.save_dir, 'best_model_loss.pt')
-                else:
-                    PATH = 'best_model_loss.pt'
-                torch.save({
-                    'epoch': epoch_num,
-                    'model_state_dict': retinanet.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
-                }, PATH)
+                save_models(
+                    model_path=os.path.join(parser.save_dir, "best_model_loss.pt"),
+                    state_dict_path=os.path.join(parser.save_dir, "best_state_dict_loss.pt"),
+                    model=retinanet,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    loss='Running loss: {:1.5f}'.format(np.mean(epoch_loss)),
+                    epoch=epoch_num,
+                )
             mAP = csv_eval.evaluate(dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
-                if parser.save_dir:
-                    PATH = os.path.join(parser.save_dir, 'best_model_mAp.pt')
-                else:
-                    PATH = 'best_model_mAp.pt'
-                torch.save({
-                    'epoch': epoch_num,
-                    'model_state_dict': retinanet.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    'loss': np.mean(epoch_loss),
-                    'mAp': max_mAp
-                }, PATH)
-                torch.save(retinanet, os.path.join(os.path.dirname(
-                    PATH), 'best_model_mAp_ready_to_eval.pt'))
+                save_models(
+                    model_path=os.path.join(parser.save_dir, "best_model_mAP.pt"),
+                    state_dict_path=os.path.join(parser.save_dir, "best_state_dict_mAP.pt"),
+                    model=retinanet,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    loss=np.mean(epoch_loss),
+                    mAP=max_mAp,
+                    epoch=epoch_num,
+                )
 
         log_history(epoch_num,
                     {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
                      'rxy-loss': np.mean(epoch_XY_REG_loss),
                      'ra-loss': np.mean(epoch_ANGLE_REG_loss),
-                     'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
+                     'mAp': mAP}, os.path.join(os.path.dirname(parser.save_dir), 'history.json'))
         scheduler.step(np.mean(epoch_loss))
     retinanet.eval()
-    if parser.save_dir:
-        torch.save(retinanet, os.path.join(parser.save_dir, 'model_final.pt'))
-    else:
-        torch.save(retinanet, 'model_final.pt')
-
+    save_models(
+        state_dict_path=os.path.join(parser.save_dir, "state_dict_final.pt"),
+        model_path=os.path.join(parser.save_dir, "model_final.pt"),
+        model=retinanet,
+    )
 
 if __name__ == '__main__':
     main()
