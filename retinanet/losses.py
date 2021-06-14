@@ -108,9 +108,6 @@ class FocalLoss(nn.Module):
             dxy, dalpha = calc_distance(
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
-            print("dxy_argmin.shape", dxy_argmin.shape)
-            print("annotations.shape", annotations.shape)
-            print("dxy_argmin_minmax", dxy_argmin.min(), dxy_argmin.max())
             # compute the loss for classification
             # print('classification.shape: ', classification.shape)
             # print('anchors.shape: ', anchors.shape)
@@ -142,16 +139,13 @@ class FocalLoss(nn.Module):
                     assigned_annotations[:, 3].long()] = 1
             # -------------------------------------------------------------------------
             dampening_factor = torch.full(size=(targets.shape[0], ), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
-            targets_max = targets.max(axis=1)
+            targets_max, _ = targets.max(axis=1)
             if torch.cuda.is_available():
                 dampening_factor = dampening_factor.cuda()
-            ignored_background = np.logical_or((targets_max == -1), (targets_max == 0))
-            print("ignored_background", ignored_background.shape)
-            print("positive_indices", positive_indices.shape)
-            print("targets_max", targets_max.shape)
-            assert np.logical_and(ignored_background, positive_indices.cpu().detach().numpy()).sum() == 0.0, "ASSERT ERROR 1"
-            assert np.logical_or(ignored_background,
-                                  positive_indices.cpu().detach().numpy()).sum() == positive_indices.shape[0], "ASSERT ERROR 2"
+            ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
+            assert torch.logical_and(ignored_background, positive_indices).sum() == 0.0, "Overlap between positive indices and non positive indices!!!"
+            assert torch.logical_or(ignored_background,
+                                  positive_indices).sum() == positive_indices.shape[0], "Some indices not in background, ignored or positive!!!"
             dampening_factor[targets_max == -1] = 1.0
             dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
             accepted_annotations_indices = dxy_argmin[positive_indices]
