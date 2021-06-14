@@ -145,8 +145,8 @@ class FocalLoss(nn.Module):
             targets_max = targets.max(axis=1)
             if torch.cuda.is_available():
                 dampening_factor = dampening_factor.cuda()
-            ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
-            assert torch.logical_and(ignored_background.cuda(), positive_indices).sum() == 0.0, "ASSERT ERROR"
+            ignored_background = np.logical_or((targets_max == -1), (targets_max == 0))
+            assert np.logical_and(ignored_background, positive_indices.cpu().to_numpy()).sum() == 0.0, "ASSERT ERROR"
             dampening_factor[targets_max == -1] = 1.0
             dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
             accepted_annotations_indices = dxy_argmin[positive_indices]
