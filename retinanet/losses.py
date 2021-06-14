@@ -193,19 +193,11 @@ class FocalLoss(nn.Module):
                 targets = torch.stack(
                     (targets_dx, targets_dy, targets_dalpha))
                 targets = targets.t()
-                print("targets", targets.shape)
-                print("assigned_annotations", assigned_annotations.shape)
-                print("positive_indices", positive_indices.sum())
                 if torch.cuda.is_available():
                     targets = targets.cuda()
-                    targets = targets / \
-                              torch.Tensor([[1, 1, 1]]).cuda()
+                    targets = targets / torch.Tensor([[1, 1, 1]]).cuda()
                 else:
                     targets = targets/torch.Tensor([[1, 1, 1]])
-
-                dampening_factor = torch.full(size=(targets.shape[0],), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
-
-                dampening_factor[assigned_annotations[:, 3] == 1] = 1
 
                 negative_indices = 1 + (~positive_indices)
                 regression_diff_xy = torch.abs(
@@ -218,6 +210,8 @@ class FocalLoss(nn.Module):
                     torch.le(regression_diff_xy, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0)
+                print("regression_loss_xy", regression_loss_xy.shape, regression_loss_xy.dtype)
+                print("regression_diff_angle", regression_diff_angle.shape, regression_diff_angle.dtype)
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
@@ -232,7 +226,6 @@ class FocalLoss(nn.Module):
                         torch.tensor(0).float())
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
-
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
             torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
             torch.stack(angle_distance_regression_losses).mean(
