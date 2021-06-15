@@ -171,7 +171,7 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
-            # cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
+            cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
@@ -210,8 +210,8 @@ class FocalLoss(nn.Module):
                     torch.le(regression_diff_xy, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0)
-                # regression_loss_xy *= torch.unsqueeze(dampening_factor[positive_indices], dim=1)
-                # regression_diff_angle *= dampening_factor[positive_indices]
+                regression_loss_xy *= torch.unsqueeze(dampening_factor[positive_indices], dim=1)
+                regression_diff_angle *= dampening_factor[positive_indices]
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
