@@ -1,3 +1,7 @@
+"""
+This script visualize accepted and ignored anchors, assigned to annotations
+"""
+
 from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
     UnNormalizer, Normalizer
 from retinanet.losses import calc_distance
