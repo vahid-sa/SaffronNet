@@ -6,7 +6,6 @@ import os
 from os import path as osp
 import argparse
 from typing import Tuple
-import collections
 from math import inf
 import torch.optim as optim
 from torchvision import transforms
@@ -23,19 +22,6 @@ import labeling
 from retinanet import utils
 from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
-
-parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
-parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
-                    help="The directory where images are in.")
-parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
-                    choices=[".jpg", ".png"], help="image extension")
-parser.add_argument("-m", "--model", required=True, type=str, dest="model",
-                    help="path to the model")
-parser.add_argument("-s", "--state-dict", required=True, type=str, dest="state_dict",
-                    help="path to the state_dict")
-parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
-                    help="where to save output")
-args = parser.parse_args()
 
 
 class Training:
@@ -329,8 +315,9 @@ class Training:
         else:
             torch.save(retinanet, 'model_final.pt')
 
-    def manage_cycles(self, num_cycles):
-        for i in range(1, num_cycles + 1):
+    def manage_cycles(self):
+        for i in range(1, self.args.num_cycles + 1):
+            print("\nCycle {0}\n".format(i))
             if i == 1:
                 model = torch.load(self.args.model)
                 state_dict = torch.load(self.args.state_dict)
@@ -359,3 +346,23 @@ class Training:
                 save_model_path=self.model_path_pattern.format(i),
                 save_state_dict_path=self.state_dict_path_pattern.format(i),
             )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
+    parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
+                        help="The directory where images are in.")
+    parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
+                        choices=[".jpg", ".png"], help="image extension")
+    parser.add_argument("-m", "--model", required=True, type=str, dest="model",
+                        help="path to the model")
+    parser.add_argument("-s", "--state-dict", required=True, type=str, dest="state_dict",
+                        help="path to the state_dict")
+    parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
+                        help="where to save output")
+    parser.add_argument("-c", "--num-cycles", type=str, required=True, dest="num_cycles",
+                        help="where to save output")
+    args = parser.parse_args()
+
+    trainer = Training(args=args)
+    trainer.manage_cycles()
