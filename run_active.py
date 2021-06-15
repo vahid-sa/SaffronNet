@@ -344,7 +344,7 @@ class Training:
             )
 
             labeling.write_corrected_boxes(
-                boxes=corrected_boxes,
+                boxes=corrected_boxes[:, [NAME, X, Y, ALPHA, LABEL]],
                 path=self.corrected_annotations_file,
                 class_dict=self.index_to_class,
             )
