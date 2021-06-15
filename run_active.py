@@ -26,6 +26,8 @@ from retinanet.settings import NAME, X, Y, ALPHA, LABEL
 
 class Training:
     def __init__(self, args):
+        if not osp.isdir("./active_annotations/"):
+            os.mkdir("./active_annotations/")
         self.supervised_file = "./annotations/supervised.csv"
         self.unsupervised_file = "./annotations/unsupervised.csv"
         self.validation_file = "annotations/validation.csv"
