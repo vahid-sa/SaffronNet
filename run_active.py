@@ -14,34 +14,28 @@ import shutil
 
 import retinanet.utils
 from retinanet import model
-from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
-    Normalizer
+from retinanet.dataloader import CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, Normalizer
 from torch.utils.data import DataLoader
 from retinanet import csv_eval
 from utils.log_utils import log_history
 from prediction import imageloader, predict_boxes
 import labeling
 from retinanet import utils
+from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
-import visualize
 
 parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
 parser.add_argument("-f", "--filename-path", required=True, type=str, dest="filenames_path",
                     help="Path to the file that reads the name of image files")
-parser.add_argument("-p", "--partition", required=True, type=str, dest="partition",
-                    choices=["supervised", "unsupervised", "validation", "test"], help="which part of file names")
-parser.add_argument("-c", "--class-list", type=str, required=True, dest="class_list",
-                    help="path to the class_list file")
-
 parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
                     help="The directory where images are in.")
 parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
                     choices=[".jpg", ".png"], help="image extension")
 parser.add_argument("-m", "--model", required=True, type=str, dest="model",
                     help="path to the model")
-parser.add_argument("-s", "state-dict", required=True, type=str, dest="state_dict",
-                    help="pahr to the state_dict")
-parser.add_argument("-o", "--output-dir", type=str, required=True, dest="output_dir",
+parser.add_argument("-s", "--state-dict", required=True, type=str, dest="state_dict",
+                    help="path to the state_dict")
+parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
                     help="where to save output")
 args = parser.parse_args()
 
@@ -59,7 +53,7 @@ class Training:
 
         self.loader = imageloader.CSVDataset(
             filenames_path="annotations/filenames.json",
-            partition=args.partition,
+            partition="unsupervised",
             class_list=self.class_list_file,
             images_dir=args.image_dir,
             image_extension=args.ext,
@@ -71,8 +65,7 @@ class Training:
             class_list=self.class_list_file,
             transform=transforms.Compose([Normalizer(), Resizer()]),
             images_dir=args.images_dir,
-            image_extension=
-            args.ext,
+            image_extension=args.ext,
         )
 
         self.args = args
@@ -161,18 +154,15 @@ class Training:
         print()
         return np.asarray(all_detections, dtype=np.float64)
 
-    @staticmethod
     def get_corrected_and_active_boxes(
+            self,
             previous_cycle_model_path: str,
-            loader: imageloader.CSVDataset,
-            corrected_box_annotations_path: str,
-            groundtruth_annotations_path: str,
     ) -> Tuple[np.array, np.array]:
-
+        groundtruth_annotations_path = self.unsupervised_file
         model = torch.load(previous_cycle_model_path)
-        pred_boxes = Training.detect(dataset=loader, retinanet=model)
-        if osp.isfile(corrected_box_annotations_path):
-            previous_corrected_annotations = Training.load_annotations(corrected_box_annotations_path)
+        pred_boxes = Training.detect(dataset=self.loader, retinanet=model)
+        if osp.isfile(self.corrected_annotations_file):
+            previous_corrected_annotations = self.load_annotations(self.corrected_annotations_file)
             previous_corrected_names = previous_corrected_annotations[:, NAME]
         else:
             previous_corrected_names = np.array(list(), dtype=pred_boxes.dtype)
@@ -181,7 +171,7 @@ class Training:
             previous_corrected_boxes_names=previous_corrected_names,
         )
 
-        ground_truth_annotations = Training.load_annotations(groundtruth_annotations_path)
+        ground_truth_annotations = self.load_annotations(groundtruth_annotations_path)
         corrected_boxes = labeling.label(all_gts=ground_truth_annotations, all_uncertain_preds=uncertain_boxes)
 
         corrected_mode = np.full(shape=(corrected_boxes.shape[0], 1),
@@ -195,16 +185,9 @@ class Training:
         active_boxes = active_boxes[active_boxes[:, NAME].argsort()]
         return corrected_boxes, active_boxes
 
-    def train(self, model_path, state_dict_path):
-
-        corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
-            previous_cycle_model_path=model_path,
-            loader=self.loader,
-            corrected_box_annotations_path=args.corrected_path,
-            groundtruth_annotations_path="annotations/unsupervised.csv")
-        labeling.write_active_boxes(boxes=active_boxes, path=self.train_file, class_dict=self.index_to_class)
-        labeling.write_corrected_boxes(boxes=corrected_boxes, path=self.corrected_annotations_file,
-                                       class_dict=self.index_to_class)
+    def train(self, checkpoint, save_model_path, save_state_dict_path):
+        max_mAp = 0
+        min_loss = inf
 
         dataset_train = CSVDataset(
             train_file=self.train_file,
@@ -222,7 +205,7 @@ class Training:
         if self.args.depth == 18:
             retinanet = model.resnet18(
                 num_classes=dataset_train.num_classes(), pretrained=True)
-        elif parser.depth == 34:
+        elif self.args.depth == 34:
             retinanet = model.resnet34(
                 num_classes=dataset_train.num_classes(), pretrained=True)
         elif self.args.depth == 50:
@@ -247,7 +230,7 @@ class Training:
 
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, patience=3, verbose=True)
-        checkpoint = torch.load(state_dict_path)
+        # checkpoint = torch.load(previous_state_dict_path)
         retinanet.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
@@ -257,7 +240,7 @@ class Training:
 
         print('Num training images: {}'.format(len(dataset_train)))
         loss_hist = []
-        for epoch_num in range(parser.epochs):
+        for epoch_num in range(self.args.epochs):
 
             retinanet.train()
             retinanet.module.freeze_bn()
@@ -312,57 +295,69 @@ class Training:
                     print(e)
                     continue
 
-            mAP = None
             mean_epoch_loss = np.mean(epoch_loss)
             print('Evaluating dataset')
             if min_loss > mean_epoch_loss:
-                print("loss improved from from {} to {}".format(
-                    min_loss, mean_epoch_loss))
+                print("loss improved from {} to {}".format(min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
-                if parser.save_dir:
-                    PATH = os.path.join(parser.save_dir, 'best_model_loss.pt')
-                else:
-                    PATH = 'best_model_loss.pt'
-                torch.save({
-                    'epoch': epoch_num,
-                    'model_state_dict': retinanet.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    'loss': 'Running loss: {:1.5f}'.format(np.mean(epoch_loss))
-                }, PATH)
 
             mAP = csv_eval.evaluate(self.dataset_val, retinanet)
             if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
-                if parser.save_dir:
-                    PATH = os.path.join(parser.save_dir, 'best_model_mAp.pt')
-                else:
-                    PATH = 'best_model_mAp.pt'
-                torch.save({
-                    'epoch': epoch_num,
-                    'model_state_dict': retinanet.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    'loss': np.mean(epoch_loss),
-                    'mAp': max_mAp
-                }, PATH)
-                torch.save(retinanet, os.path.join(os.path.dirname(
-                    PATH), 'best_model_mAp_ready_to_eval.pt'))
+
+                save_models(
+                    model_path=save_model_path,
+                    state_dict_path=save_state_dict_path,
+                    model=retinanet,
+                    optimizer=optimizer,
+                    scheduler=scheduler,
+                    loss=np.mean(epoch_loss),
+                    mAP=max_mAp,
+                    epoch=epoch_num,
+                )
 
             log_history(epoch_num,
                         {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
                          'rxy-loss': np.mean(epoch_XY_REG_loss),
                          'ra-loss': np.mean(epoch_ANGLE_REG_loss),
-                         'mAp': mAP}, os.path.join(os.path.dirname(PATH), 'history.json'))
+                         'mAp': mAP},
+                        os.path.join(os.path.dirname(self.args.save_dir), 'history.json'))
             scheduler.step(np.mean(epoch_loss))
 
         retinanet.eval()
-        if parser.save_dir:
-            torch.save(retinanet, os.path.join(parser.save_dir, 'model_final.pt'))
+        if self.args.save_dir:
+            torch.save(retinanet, os.path.join(self.args.save_dir, 'model_final.pt'))
         else:
             torch.save(retinanet, 'model_final.pt')
 
+    def manage_cycles(self, num_cycles):
+        for i in range(1, num_cycles + 1):
+            if i == 1:
+                model = torch.load(self.args.model)
+                state_dict = torch.load(self.args.state_dict)
+            else:
+                model = torch.load(self.model_path_pattern.format(i - 1))
+                state_dict = torch.load(self.state_dict_path_pattern.format(i - 1))
 
+            corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
+                previous_cycle_model_path=model,
+            )
 
+            labeling.write_active_boxes(
+                boxes=active_boxes,
+                path=self.train_file,
+                class_dict=self.index_to_class,
+            )
 
+            labeling.write_corrected_boxes(
+                boxes=corrected_boxes,
+                path=self.corrected_annotations_file,
+                class_dict=self.index_to_class,
+            )
+
+            self.train(
+                checkpoint=state_dict,
+                save_model_path=self.model_path_pattern.format(i),
+                save_state_dict_path=self.state_dict_path_pattern.format(i),
+            )
