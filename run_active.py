@@ -25,8 +25,6 @@ from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
 
 parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
-parser.add_argument("-f", "--filename-path", required=True, type=str, dest="filenames_path",
-                    help="Path to the file that reads the name of image files")
 parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
                     help="The directory where images are in.")
 parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
