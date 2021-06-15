@@ -19,13 +19,13 @@ def select_noisy_indices(boxes, uncertain_selected_indices, previous_corrected_b
     upper_bound = scores > 1 - noisy_thresh
     selected_by_score = np.logical_or(lower_bound, upper_bound)
     selected_by_score[uncertain_selected_indices] = False
-    selected_by_score = np.squeeze(np.argwhere(selected_by_score))
 
     candidate_names = np.unique(
         np.concatenate([boxes[uncertain_selected_indices, NAME], previous_corrected_boxes_names], axis=0))
     selected_by_name = np.in1d(boxes[:, NAME], candidate_names)
 
     selected = np.logical_and(selected_by_name, selected_by_score)
+    selected = np.squeeze(np.argwhere(selected))
     return selected
 
 
