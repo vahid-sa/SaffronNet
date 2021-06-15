@@ -240,7 +240,7 @@ class CSVDataset(Dataset):
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotation_list = self.image_data[self.image_names[image_index]]
-        annotations = np.zeros((0, NUM_VARIABLES+1))
+        annotations = np.zeros((0, NUM_VARIABLES+2))
 
         # some images appear to miss annotations (like image with id 257034)
         if len(annotation_list) == 0:
@@ -253,7 +253,6 @@ class CSVDataset(Dataset):
             ctr_y = a['y']
             alpha = normalize_alpha(90 - a['alpha'])
             ground_truth_status = a["ground_truth"]
-
 
             annotation = np.zeros((1, NUM_VARIABLES+2))
 
