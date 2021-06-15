@@ -143,8 +143,10 @@ class Training:
             previous_cycle_model_path: str,
     ) -> Tuple[np.array, np.array]:
         groundtruth_annotations_path = self.unsupervised_file
-        model = torch.load(previous_cycle_model_path)
-        pred_boxes = Training.detect(dataset=self.loader, retinanet=model)
+        fileIO = open(previous_cycle_model_path, "rb")
+        loaded_model = torch.load(fileIO)
+        fileIO.close()
+        pred_boxes = Training.detect(dataset=self.loader, retinanet=loaded_model)
         if osp.isfile(self.corrected_annotations_file):
             previous_corrected_annotations = self.load_annotations(self.corrected_annotations_file)
             previous_corrected_names = previous_corrected_annotations[:, NAME]
