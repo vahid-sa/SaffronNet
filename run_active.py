@@ -319,14 +319,21 @@ class Training:
         for i in range(1, self.args.num_cycles + 1):
             print("\nCycle {0}\n".format(i))
             if i == 1:
-                model = torch.load(self.args.model)
-                state_dict = torch.load(self.args.state_dict)
+                model_path = self.args.model
+                state_dict_path = self.args.state_dict
             else:
-                model = torch.load(self.model_path_pattern.format(i - 1))
-                state_dict = torch.load(self.state_dict_path_pattern.format(i - 1))
+                model_path = self.model_path_pattern.format(i - 1)
+                state_dict_path = self.state_dict_path_pattern.format(i - 1)
+
+            fileModelIO = open(model_path, "rb")
+            fileStateDictIO = open(state_dict_path, "rb")
+            loaded_model = torch.load(fileModelIO)
+            state_dict = torch.load(fileStateDictIO)
+            fileModelIO.close()
+            fileStateDictIO.close()
 
             corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
-                previous_cycle_model_path=model,
+                previous_cycle_model_path=loaded_model,
             )
 
             labeling.write_active_boxes(
