@@ -48,7 +48,7 @@ class Training:
             train_file=self.validation_file,
             class_list=self.class_list_file,
             transform=transforms.Compose([Normalizer(), Resizer()]),
-            images_dir=args.images_dir,
+            images_dir=args.image_dir,
             image_extension=args.ext,
         )
 
