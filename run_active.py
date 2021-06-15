@@ -360,8 +360,12 @@ if __name__ == "__main__":
                         help="path to the state_dict")
     parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
                         help="where to save output")
-    parser.add_argument("-c", "--num-cycles", type=str, required=True, dest="num_cycles",
-                        help="where to save output")
+    parser.add_argument("-c", "--num-cycles", type=int, required=True, dest="num_cycles",
+                        help="number of active cycles")
+    parser.add_argument("-d", "--depth", type=int, required=True, dest="depth",
+                        choices=(18, 34, 50, 101, 52), default=50, help="ResNet depth")
+    parser.add_argument("-p", "--epochs", type=int, required=True, dest="epochs",
+                        default=20, help="Number of Epochs")
     args = parser.parse_args()
 
     trainer = Training(args=args)
