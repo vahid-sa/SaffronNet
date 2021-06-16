@@ -225,6 +225,10 @@ class Training:
 
         print('Num training images: {}'.format(len(dataset_train)))
         loss_hist = []
+        init_mAP = csv_eval.evaluate(self.dataset_val, retinanet)
+        print("init_mAP", init_mAP)
+        del init_mAP
+        
         for epoch_num in range(self.args.epochs):
 
             retinanet.train()
