@@ -14,9 +14,8 @@ from retinanet.dataloader import CSVDataset, Resizer, Normalizer
 from retinanet import csv_eval
 
 
-class TestModel(unittest.TestCase):
+class TestModel:
     def __init__(self):
-        super().__init__()
         self.args = args
 
         self.dataset_val = CSVDataset(
@@ -47,4 +46,5 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
                         help="The directory where images are in.")
     args = parser.parse_args()
-    unittest.main()
+    tm = TestModel()
+    tm.test_model()
