@@ -17,7 +17,7 @@ from retinanet import csv_eval
 class TestModel(unittest.TestCase):
     def __init__(self):
         super().__init__()
-        self.args = TestModel.parse()
+        self.args = args
 
         self.dataset_val = CSVDataset(
             train_file="./annotations/validation.csv",
@@ -26,18 +26,6 @@ class TestModel(unittest.TestCase):
             images_dir=self.args.image_dir,
             image_extension=self.args.ext,
         )
-
-    @staticmethod
-    def parse():
-        parser = argparse.ArgumentParser(description="Test load model")
-        parser.add_argument("-m", "--model", required=True, type=str, dest="model",
-                            help="path to the model")
-        parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
-                            choices=[".jpg", ".png"], help="image extension")
-        parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
-                            help="The directory where images are in.")
-        args = parser.parse_args()
-        return args
 
     def test_model(self):
         fileIO = open(self.args.model, "rb")
@@ -51,4 +39,12 @@ class TestModel(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Test load model")
+    parser.add_argument("-m", "--model", required=True, type=str, dest="model",
+                        help="path to the model")
+    parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
+                        choices=[".jpg", ".png"], help="image extension")
+    parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
+                        help="The directory where images are in.")
+    args = parser.parse_args()
     unittest.main()
