@@ -1,7 +1,14 @@
+import sys
+import os
 import torch
 import torchvision
 import unittest
 import argparse
+from os import path as osp
+
+PACKAGE_PARENT = '..'
+SCRIPT_DIR = osp.dirname(os.path.realpath(osp.join(os.getcwd(), osp.expanduser(__file__))))
+sys.path.append(osp.normpath(osp.join(SCRIPT_DIR, PACKAGE_PARENT)))
 
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
 from retinanet import csv_eval
@@ -41,3 +48,7 @@ class TestModel(unittest.TestCase):
         model.eval()
         mAP = csv_eval.evaluate(self.dataset_val, model)
         print(mAP)
+
+
+if __name__ == "__main__":
+    unittest.main()
