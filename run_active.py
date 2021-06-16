@@ -178,7 +178,7 @@ class Training:
             train_file=self.train_file,
             class_list=self.class_list_file,
             transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]),
-            images_dir=self.args.images_dir,
+            images_dir=self.args.image_dir,
             image_extension=self.args.ext,
         )
         sampler = AspectRatioBasedSampler(
@@ -228,7 +228,7 @@ class Training:
         init_mAP = csv_eval.evaluate(self.dataset_val, retinanet)
         print("init_mAP", init_mAP)
         del init_mAP
-        
+
         for epoch_num in range(self.args.epochs):
 
             retinanet.train()
