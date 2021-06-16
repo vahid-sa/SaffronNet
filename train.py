@@ -249,6 +249,8 @@ def main(args=None):
         state_dict_path=os.path.join(parser.save_dir, "state_dict_final.pt"),
         model_path=os.path.join(parser.save_dir, "model_final.pt"),
         model=retinanet,
+        optimizer=optimizer,
+        scheduler=scheduler,
     )
 
 if __name__ == '__main__':
