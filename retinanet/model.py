@@ -436,7 +436,7 @@ class VGGNet(nn.Module):
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
 
-def vgg17(num_classes, pretrained=True, **kwargs):
+def vgg7(num_classes, pretrained=True, **kwargs):
     """Constructs a ResNet-18 model.
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
