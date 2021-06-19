@@ -346,7 +346,7 @@ class VGGNet(nn.Module):
         vgg16 = models.vgg16(pretrained=pretrained)
         vgg7 = list(list(vgg16.children())[0][:14].children())
         vgg7.append(
-            torch.max_pool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False))
+            nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False))
         self.vgg7bn = nn.Sequential(* vgg7)
 
         self.regressionModel = RegressionModel(
