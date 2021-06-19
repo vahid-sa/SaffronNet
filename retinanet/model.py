@@ -11,6 +11,7 @@ from retinanet.anchors import Anchors
 from retinanet import losses
 from utils.visutils import draw_line
 from .settings import NUM_VARIABLES, ANGLE_SPLIT
+import torchvision.models as models
 
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
@@ -337,6 +338,111 @@ class ResNet(nn.Module):
 
             return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
+
+class VGGNet(nn.Module):
+    def __init__(self, num_classes, pretrained):
+
+        super(VGGNet, self).__init__()
+        vgg16 = models.vgg16(pretrained=pretrained)
+        vgg7 = list(list(vgg16.children())[0][:14].children())
+        vgg7.append(
+            torch.nn.MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False))
+        self.vgg7bn = nn.Sequential(* vgg7)
+
+        self.regressionModel = RegressionModel(
+            num_features_in=256, feature_size=256)
+        self.classificationModel = ClassificationModel(
+            num_features_in=256, feature_size=256, num_classes=num_classes)
+
+        self.anchors = Anchors()
+        self.regressBoxes = BBoxTransform()
+        self.clipBoxes = ClipBoxes()
+        self.focalLoss = losses.FocalLoss()
+
+        prior = 0.01
+        self.classificationModel.output.weight.data.fill_(0)
+        self.classificationModel.output.bias.data.fill_(
+            -math.log((1.0 - prior) / prior))
+        self.regressionModel.output.weight.data.fill_(0)
+        self.regressionModel.output.bias.data.fill_(0)
+
+    def forward(self, inputs):
+        if self.training:
+            img_batch, annotations = inputs
+        else:
+            img_batch = inputs
+
+        x = self.vgg7bn(img_batch)
+
+        regression = self.regressionModel(x)
+        classification = self.classificationModel(x)
+        anchors = self.anchors(img_batch)
+
+        if self.training:
+            return self.focalLoss(classification, regression, anchors, annotations)
+        else:
+            self.img_number += 1
+            transformed_anchors = self.regressBoxes(anchors, regression)
+            transformed_anchors = self.clipBoxes(
+                transformed_anchors, img_batch)
+
+            finalResult = [[], [], []]
+
+            finalScores = torch.Tensor([])
+            finalAnchorBoxesIndexes = torch.Tensor([]).long()
+            finalAnchorBoxesCoordinates = torch.Tensor([])
+            if torch.cuda.is_available():
+                finalScores = finalScores.cuda()
+                finalAnchorBoxesIndexes = finalAnchorBoxesIndexes.cuda()
+                finalAnchorBoxesCoordinates = finalAnchorBoxesCoordinates.cuda()
+
+            for i in range(classification.shape[2]):
+                scores = torch.squeeze(classification[:, :, i])
+                anchorBoxes = torch.squeeze(transformed_anchors)
+
+                anchorBoxes, scores = filter(
+                    anchorBoxes, scores, min_score=0.05)
+                count = scores.shape[0]
+                if count == 0:
+                    continue
+
+                anchors_nms_idx = torch.Tensor([]).long()
+                if torch.cuda.is_available():
+                    anchors_nms_idx = anchors_nms_idx.cuda()
+
+                anchors_nms_idx = nms(
+                    anchorBoxes,
+                    scores,
+                    min_score=0.5)
+                if len(anchors_nms_idx) == 0:
+                    continue
+                finalResult[0].extend(scores[anchors_nms_idx])
+                finalResult[1].extend(torch.tensor(
+                    [i] * anchors_nms_idx.shape[0]))
+                finalResult[2].extend(anchorBoxes[anchors_nms_idx])
+
+                finalScores = torch.cat(
+                    (finalScores, scores[anchors_nms_idx]))
+                finalAnchorBoxesIndexesValue = torch.tensor(
+                    [i] * anchors_nms_idx.shape[0])
+                if torch.cuda.is_available():
+                    finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
+
+                finalAnchorBoxesIndexes = torch.cat(
+                    (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
+                finalAnchorBoxesCoordinates = torch.cat(
+                    (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+
+            return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
+
+
+def vgg17(num_classes, pretrained=True, **kwargs):
+    """Constructs a ResNet-18 model.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = VGGNet(num_classes, pretrained=pretrained, **kwargs)
+    return model
 
 def resnet18(num_classes, pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
