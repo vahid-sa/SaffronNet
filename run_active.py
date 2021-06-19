@@ -35,7 +35,9 @@ class Training:
         self.corrected_annotations_file = "active_annotations/corrected.csv"
         self.train_file = "active_annotations/train.csv"
         self.class_to_index, self.index_to_class = utils.load_classes(csv_class_list_path=self.class_list_file)
-        self.model_path_pattern, self.state_dict_path_pattern = Training.get_model_saving_pattern()
+        self.model_path_pattern, self.state_dict_path_pattern = Training.get_model_saving_pattern(
+            saving_model_dir=args.save_dir
+        )
 
         self.loader = imageloader.CSVDataset(
             filenames_path="annotations/filenames.json",
@@ -57,10 +59,9 @@ class Training:
         self.args = args
 
     @staticmethod
-    def get_model_saving_pattern() -> Tuple[str, str]:
-        saving_model_dir = "/mnt/2tra/saeedi/models/SaffronNet"
-        model_dir = osp.join(saving_model_dir, "model")
-        state_dict_dir = osp.join(saving_model_dir, "state_dict")
+    def get_model_saving_pattern(saving_model_dir: str) -> Tuple[str, str]:
+        model_dir = osp.join(osp.expanduser(osp.expandvars(osp.abspath(saving_model_dir))), "model")
+        state_dict_dir = osp.join(osp.expanduser(osp.expandvars(osp.abspath(saving_model_dir))), "state_dict")
         if osp.isdir(model_dir):
             shutil.rmtree(model_dir)
         if osp.isdir(state_dict_dir):
