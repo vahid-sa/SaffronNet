@@ -21,6 +21,6 @@ def save_models(model_path: str,
     if epoch is not None:
         state_dict["epoch"] = epoch
     with open(model_path, "wb") as fileIO:
-        torch.save(model, fileIO)
+        torch.save(obj=model, f=fileIO)
     with open(state_dict_path, "wb") as fileIO:
-        torch.save(state_dict, fileIO)
+        torch.save(obj=state_dict, f=fileIO)
