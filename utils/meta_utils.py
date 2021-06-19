@@ -20,8 +20,7 @@ def save_models(model_path: str,
         state_dict["mAP"] = mAP
     if epoch is not None:
         state_dict["epoch"] = epoch
-
     with open(model_path, "wb") as fileIO:
-        torch.save(fileIO, model_path)
+        torch.save(fileIO, model)
     with open(state_dict_path, "wb") as fileIO:
-        torch.save(fileIO, state_dict_path)
+        torch.save(fileIO, state_dict)
