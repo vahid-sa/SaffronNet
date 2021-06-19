@@ -381,7 +381,6 @@ class VGGNet(nn.Module):
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
         else:
-            self.img_number += 1
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(
                 transformed_anchors, img_batch)
