@@ -38,7 +38,7 @@ def main(args=None):
         '--csv_val', help='Path to file containing validation annotations (optional, see readme)')
 
     parser.add_argument(
-        '--model', help='backbone for retinanet, must be "resnet" of "vgg"', type="str", default="vgg"
+        '--model', help='backbone for retinanet, must be "resnet" of "vgg"', type=str, default="vgg"
     )
     parser.add_argument(
         '--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
@@ -125,7 +125,8 @@ def main(args=None):
                 'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
 
     elif parser.model == 'vgg':
-        retinanet = model.vgg7()
+        retinanet = model.vgg7(
+            num_classes=dataset_train.num_classes, pretrained=True)
     else:
         raise ValueError(
             "Unsupported model type, must be one of 'resnet' or 'vgg'")
@@ -185,8 +186,8 @@ def main(args=None):
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
 
-                loss = classification_loss + xydistance_regression_loss + \
-                    angle_distance_regression_losses
+                loss = classification_loss + xydistance_regression_loss +
+                angle_distance_regression_losses
 
                 if bool(loss == 0):
                     continue
