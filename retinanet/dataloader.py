@@ -76,9 +76,9 @@ class CocoDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        img = self.load_image(idx)
+        img, img_name = self.load_image(idx)
         annot = self.load_annotations(idx)
-        sample = {'img': img, 'annot': annot}
+        sample = {'img': img, 'annot': annot, 'name': img_name}
         if self.transform:
             sample = self.transform(sample)
 
@@ -86,14 +86,15 @@ class CocoDataset(Dataset):
 
     def load_image(self, image_index):
         image_info = self.coco.loadImgs(self.image_ids[image_index])[0]
+        img_name = image_info['file_name']
         path = os.path.join(self.root_dir, 'images',
-                            self.set_name, image_info['file_name'])
+                            self.set_name, img_name)
         img = skimage.io.imread(path)
 
         if len(img.shape) == 2:
             img = skimage.color.gray2rgb(img)
 
-        return img.astype(np.float32)/255.0
+        return img.astype(np.float32)/255.0, img_name
 
     def load_annotations(self, image_index):
         # get ground truth annotations
