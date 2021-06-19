@@ -249,6 +249,9 @@ class Training:
                     else:
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                             [data['img'].float(), data['annot']])
+                    print("img_min: {0}, img_max{1}, annot: {2} {3}".format(
+                        data['img'].float().min(), data['img'].float().max(), data["annot"].shape, data["annot"].dtype
+                    ))
                     classification_loss = classification_loss.mean()
                     xydistance_regression_loss = xydistance_regression_loss.mean()
                     angle_distance_regression_losses = angle_distance_regression_losses.mean()
