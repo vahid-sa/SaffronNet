@@ -159,7 +159,8 @@ def main(args=None):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
     retinanet.train()
-    retinanet.module.freeze_bn()
+    if parser.model == 'resnet':
+        retinanet.module.freeze_bn()
 
     print('Num training images: {}'.format(len(dataset_train)))
 
