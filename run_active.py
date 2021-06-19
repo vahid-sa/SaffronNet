@@ -22,6 +22,7 @@ import labeling
 from retinanet import utils
 from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
+from visualize import draw_correct_noisy
 
 
 class Training:
@@ -57,6 +58,7 @@ class Training:
         )
 
         self.args = args
+        self.cycle_number: int
 
     @staticmethod
     def get_model_saving_pattern(saving_model_dir: str) -> Tuple[str, str]:
@@ -169,6 +171,16 @@ class Training:
         noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA, LABEL]], noisy_mode], axis=1)
         active_boxes = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
         active_boxes = active_boxes[active_boxes[:, NAME].argsort()]
+        save_images_dir = osp.join(self.args.save_image_dir, str(self.cycle_number))
+        if osp.isdir(save_images_dir):
+            shutil.rmtree(save_images_dir)
+        os.makedirs(save_images_dir, exist_ok=False)
+        draw_correct_noisy(
+            loader=self.loader,
+            detections=active_boxes,
+            output_dir=save_images_dir,
+            images_dir=self.args.image_dir,
+        )
         return corrected_boxes, active_boxes
 
     def train(self, checkpoint, save_model_path, save_state_dict_path):
@@ -231,7 +243,6 @@ class Training:
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
-
             retinanet.train()
             retinanet.module.freeze_bn()
 
@@ -249,8 +260,6 @@ class Training:
                     else:
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
                             [data['img'].float(), data['annot']])
-                    print("annot_min: {2} {3}".format(
-                        data['img'].float().min(dim=(0, 1)), data['img'].float().max(dim=(0, 1))))
                     classification_loss = classification_loss.mean()
                     xydistance_regression_loss = xydistance_regression_loss.mean()
                     angle_distance_regression_losses = angle_distance_regression_losses.mean()
@@ -325,6 +334,7 @@ class Training:
 
     def manage_cycles(self):
         for i in range(1, self.args.num_cycles + 1):
+            self.cycle_number = i
             print("\nCycle {0}\n".format(i))
             if i == 1:
                 model_path = self.args.model
@@ -381,6 +391,8 @@ if __name__ == "__main__":
                         choices=(18, 34, 50, 101, 52), default=50, help="ResNet depth")
     parser.add_argument("-p", "--epochs", type=int, required=True, dest="epochs",
                         default=20, help="Number of Epochs")
+    parser.add_argument("--image-save-dir", type=str, required=True, dest="image_save_dir",
+                        help="where to save images")
     args = parser.parse_args()
 
     trainer = Training(args=args)
