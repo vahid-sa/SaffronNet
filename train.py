@@ -186,8 +186,8 @@ def main(args=None):
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
 
-                loss = classification_loss + xydistance_regression_loss +
-                angle_distance_regression_losses
+                loss = classification_loss + xydistance_regression_loss + \
+                    angle_distance_regression_losses
 
                 if bool(loss == 0):
                     continue
