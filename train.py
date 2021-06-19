@@ -126,7 +126,7 @@ def main(args=None):
 
     elif parser.model == 'vgg':
         retinanet = model.vgg7(
-            num_classes=dataset_train.num_classes, pretrained=True)
+            num_classes=dataset_train.num_classes(), pretrained=True)
     else:
         raise ValueError(
             "Unsupported model type, must be one of 'resnet' or 'vgg'")
