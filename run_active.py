@@ -171,7 +171,7 @@ class Training:
         noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA, LABEL]], noisy_mode], axis=1)
         active_boxes = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
         active_boxes = active_boxes[active_boxes[:, NAME].argsort()]
-        save_images_dir = osp.join(self.args.save_image_dir, str(self.cycle_number))
+        save_images_dir = osp.join(self.args.image_save_dir, str(self.cycle_number))
         if osp.isdir(save_images_dir):
             shutil.rmtree(save_images_dir)
         os.makedirs(save_images_dir, exist_ok=False)
