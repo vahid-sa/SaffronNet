@@ -75,7 +75,7 @@ def write_active_boxes(boxes: np.array, path: str, class_dict: dict):
 
 def write_corrected_boxes(boxes: np.array, path: str, class_dict: dict):
     assert (len(boxes.shape) == 2) and (boxes.shape[1] == len([NAME, X, Y, ALPHA, LABEL])), "Incorrect boxes format."
-    fileIO = open(path, mode="a")
+    fileIO = open(path, mode="w")
     writer = csv.writer(fileIO, delimiter=",")
     for box in boxes:
         name = format(int(box[NAME]), "03d")
