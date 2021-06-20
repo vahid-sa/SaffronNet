@@ -75,6 +75,7 @@ def draw_correct_noisy(loader, detections, images_dir, output_dir, ext=".jpg"):
 	name_col = detections[:, NAME]
 	print()
 	for i in range(len(loader)):
+		count_noisy_annots, count_corrected_annots = 0, 0
 		img_path = osp.join(images_dir, "{0}{1}".format(loader[i]["name"], ext))
 		img = cv2.imread(img_path)
 		img_name = float(int(loader[i]["name"]))
@@ -84,8 +85,13 @@ def draw_correct_noisy(loader, detections, images_dir, output_dir, ext=".jpg"):
 			det = image_detections[j]
 			im_name, x, y, alpha = det[[NAME, X, Y, ALPHA]]
 			status = det[-1]
-			if status == ActiveLabelMode.uncertain.value or status == ActiveLabelMode.corrected.value:
+			if status == ActiveLabelMode.corrected.value:
 				has_uncertain = True
+				count_corrected_annots += 1
+			elif status ==ActiveLabelMode.noisy.value:
+				count_noisy_annots += 1
+			else:
+				raise ValueError("annotation can be correct or noisy")
 			line_color = active_clor_plate[status]
 			center_color = (0, 0, 0)
 			img = draw_line(
@@ -96,7 +102,8 @@ def draw_correct_noisy(loader, detections, images_dir, output_dir, ext=".jpg"):
 				center_color=center_color,
 				half_line=True,
 				line_thickness=3)
-		save_path = osp.join(output_dir, loader[i]["name"] + ext)
+		filename = "{0}_{1}_{2}{3}".format(loader[i]["name"], count_corrected_annots, count_noisy_annots, ext)
+		save_path = osp.join(output_dir, filename)
 		if has_uncertain:
 			cv2.imwrite(save_path, img)
 		print("\rsaved {0}/{1}".format(i, len(loader)), end='')
