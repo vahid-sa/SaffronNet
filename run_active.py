@@ -187,6 +187,10 @@ class Training:
             output_dir=save_images_dir,
             images_dir=self.args.image_dir,
         )
+
+        filepath, extension = osp.split(self.corrected_annotations_file)
+        save_current_path = filepath + self.cycle_number + extension
+        labeling.write_corrected_boxes(boxes=current_corrected_boxes[:, [NAME, X, Y, ALPHA, LABEL]], path=save_current_path, class_dict=self.index_to_class)
         return corrected_boxes, active_boxes
 
     def train(self, checkpoint, save_model_path, save_state_dict_path):
