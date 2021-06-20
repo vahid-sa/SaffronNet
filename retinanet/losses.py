@@ -207,8 +207,10 @@ class FocalLoss(nn.Module):
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0)
                 xydistance_regression_losses.append(regression_loss_xy.mean())
+
+                # return zero angle loss
                 angle_distance_regression_losses.append(
-                    regression_diff_angle.mean())
+                    torch.tensor(0).float().cuda())
             else:
                 if torch.cuda.is_available():
                     xydistance_regression_losses.append(

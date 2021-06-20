@@ -9,8 +9,6 @@ from .settings import NUM_VARIABLES
 from retinanet.utils import compute_distance
 
 
-
-
 def _compute_ap(recall, precision):
     """ Compute the average precision, given the recall and precision curves.
     Code originally from https://github.com/rbgirshick/py-faster-rcnn.
@@ -191,7 +189,8 @@ def evaluate(
                 min_dxy = dxys[0, assigned_annotation]
                 min_dangel = dangels[0, assigned_annotation]
 
-                if min_dxy <= XYd_threshold and min_dangel <= Ad_threshold and assigned_annotation not in detected_annotations:
+                # remove angle parameter from evaluation
+                if min_dxy <= XYd_threshold and assigned_annotation not in detected_annotations:
                     false_positives = np.append(false_positives, 0)
                     true_positives = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
