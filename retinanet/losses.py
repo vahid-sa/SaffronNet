@@ -210,9 +210,9 @@ class FocalLoss(nn.Module):
                         torch.le(regression_diff_angle, 0), torch.zeros(cls_loss.shape), regression_diff_angle)
 
                 regression_loss_xy = torch.where(
-                    torch.le(regression_diff_xy, 1.0 / 9.0),
-                    0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
-                    regression_diff_xy - 0.5 / 9.0)
+                    torch.le(regression_diff_xy, 3),
+                    regression_diff_xy * 0.5,
+                    (3 * regression_diff_xy) - 7.5)
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())
