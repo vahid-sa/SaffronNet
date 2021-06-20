@@ -51,7 +51,7 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
-        alpha = 1.0
+        alpha = 0.9
         gamma = 2.0
         batch_size = classifications.shape[0]
         classification_losses = []
