@@ -149,6 +149,7 @@ class Training:
     ) -> Tuple[np.array, np.array]:
         groundtruth_annotations_path = self.unsupervised_file
         pred_boxes = Training.detect(dataset=self.loader, retinanet=trained_model)
+        previous_corrected_annotations = None
         if osp.isfile(self.corrected_annotations_file):
             previous_corrected_annotations = self.load_annotations(self.corrected_annotations_file)
             previous_corrected_names = previous_corrected_annotations[:, NAME]
@@ -160,7 +161,12 @@ class Training:
         )
 
         ground_truth_annotations = self.load_annotations(groundtruth_annotations_path)
-        corrected_boxes = labeling.label(all_gts=ground_truth_annotations, all_uncertain_preds=uncertain_boxes)
+        current_corrected_boxes = labeling.label(all_gts=ground_truth_annotations, all_uncertain_preds=uncertain_boxes)
+        if previous_corrected_annotations is not None:
+            corrected_boxes = np.concatenate([previous_corrected_annotations, current_corrected_boxes], axis=0)
+            corrected_boxes = np.unique(corrected_boxes, axis=0)
+        else:
+            corrected_boxes = current_corrected_boxes
 
         corrected_mode = np.full(shape=(corrected_boxes.shape[0], 1),
                                  fill_value=retinanet.utils.ActiveLabelMode.corrected.value,
