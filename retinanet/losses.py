@@ -51,7 +51,7 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
-        alpha = 0.9
+        alpha = 0.95
         gamma = 2.0
         batch_size = classifications.shape[0]
         classification_losses = []
@@ -200,7 +200,7 @@ class FocalLoss(nn.Module):
                     targets[:, :2] - regression[positive_indices, :2])
 
                 regression_diff_angle = (torch.abs(
-                    targets[:, 2] - regression[positive_indices, 2]) - 5) / 10
+                    targets[:, 2] - regression[positive_indices, 2]) - 10) / 5
                 # 5 degree mismatch is normal in annotations
                 if torch.cuda.is_available():
                     regression_diff_angle = torch.where(
