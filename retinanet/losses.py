@@ -199,8 +199,15 @@ class FocalLoss(nn.Module):
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
 
-                regression_diff_angle = 1 - torch.cos(
-                    targets[:, 2] - regression[positive_indices, 2])
+                regression_diff_angle = (torch.abs(
+                    targets[:, 2] - regression[positive_indices, 2]) - 5) / 10
+                # 5 degree mismatch is normal in annotations
+                if torch.cuda.is_available():
+                    regression_diff_angle = torch.where(
+                        torch.le(regression_diff_angle, 0), torch.zeros(cls_loss.shape).cuda(), regression_diff_angle)
+                else:
+                    regression_diff_angle = torch.where(
+                        torch.le(regression_diff_angle, 0), torch.zeros(cls_loss.shape), regression_diff_angle)
 
                 regression_loss_xy = torch.where(
                     torch.le(regression_diff_xy, 1.0 / 9.0),
