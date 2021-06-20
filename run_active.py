@@ -164,7 +164,9 @@ class Training:
         current_corrected_boxes = labeling.label(all_gts=ground_truth_annotations, all_uncertain_preds=uncertain_boxes)
         if previous_corrected_annotations is not None:
             corrected_boxes = np.concatenate([previous_corrected_annotations, current_corrected_boxes], axis=0)
-            corrected_boxes = np.unique(corrected_boxes, axis=0)
+            box_pose = corrected_boxes[:, [1, 2]].astype(np.int64)
+            _, unique_indices = np.unique(box_pose, return_index=True, axis=0)
+            corrected_boxes = corrected_boxes[unique_indices, :]
         else:
             corrected_boxes = current_corrected_boxes
 
