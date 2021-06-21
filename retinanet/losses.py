@@ -132,6 +132,7 @@ class FocalLoss(nn.Module):
             # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
             assigned_annotations = center_alpha_annotation[d_argmin, :]
             targets[positive_indices, :] = 0
+            # change for ground_truth background
             targets[positive_indices,
                     assigned_annotations[:, 3].long()] = 1
             # -------------------------------------------------------------------------
@@ -144,9 +145,14 @@ class FocalLoss(nn.Module):
             assert torch.logical_or(ignored_background,
                                   positive_indices).sum() == positive_indices.shape[0], "Some indices not in background, ignored or positive!!!"
             dampening_factor[targets_max == -1] = 1.0
+            # Set noisy and ground_truth background to Dampening factor
             dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
             accepted_annotations_indices = dxy_argmin[positive_indices]
+            # accepted_annotations_status_forground = torch.squeeze(annotations[:, accepted_annotations_indices, -2]==-1)
+            # accepted_annotations_status_forground = torch.squeeze(annotations[:, accepted_annotations_indices, -2] != -1)
             accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
+            # set ground_truth object and background to 1.0
+
             dampening_factor[positive_indices] = torch.where(accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
 
             if torch.cuda.is_available():
