@@ -52,7 +52,7 @@ class FocalLoss(nn.Module):
 
     def forward(self, classifications, regressions, anchors, annotations):
         print("\nclassifications: {0}\n\nregressions: {1}\n\nanchors: {2}\n\nannotations: {3}\n".format(
-            classifications, regressions, anchors, annotations))
+            classifications.shape, regressions.shape, anchors.shape, annotations.shape))
         alpha = 0.25
         gamma = 2.0
         batch_size = classifications.shape[0]
