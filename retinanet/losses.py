@@ -109,6 +109,7 @@ class FocalLoss(nn.Module):
             dxy, dalpha = calc_distance(
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
+
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
             if torch.cuda.is_available():
@@ -119,44 +120,34 @@ class FocalLoss(nn.Module):
             a = dalpha[range(dalpha.shape[0]), dxy_argmin]
             targets[torch.ge(
                 a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
-            positive_indices = torch.logical_and(
-                torch.le(
-                    dxy_min, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
-                torch.le(
-                    a, MAX_ANOT_ANCHOR_ANGLE_DISTANCE
-                ))
-            d_argmin = positive_indices.nonzero(as_tuple=True)[0]
 
-            # assigned_annotations_indices_in_all = d_argmin.copy()
-
-            d_argmin = dxy_argmin[d_argmin]
+            positive_indices, background_positive_indices = FocalLoss.get_positive_indices(
+                annotation=center_alpha_annotation,
+                min_distances=dxy_min,
+                min_distances_args=dxy_argmin,
+                accepted_dalpha=a,
+            )
+            assigned_annotations = FocalLoss.get_assigned_annotations(
+                annotation=center_alpha_annotation,
+                min_distances_args=dxy_argmin,
+                positive_indices=positive_indices,
+            )
             num_positive_anchors = positive_indices.sum()
-            # assigned_annotations = center_alpha_annotation[deltaphi_argmin, :] # no different in result
-            assigned_annotations = center_alpha_annotation[d_argmin, :]
             targets[positive_indices, :] = 0
             # change for ground_truth background
+            assert sum(positive_indices) == assigned_annotations.shape[0], "only one index for each annotation"
+
             targets[positive_indices,
                     assigned_annotations[:, 3].long()] = 1
+
             # -------------------------------------------------------------------------
-            dampening_factor = torch.full(size=(targets.shape[0], ), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
-            targets_max, _ = targets.max(axis=1)
-            if torch.cuda.is_available():
-                dampening_factor = dampening_factor.cuda()
-            ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
-            assert torch.logical_and(ignored_background, positive_indices).sum() == 0.0, "Overlap between positive indices and non positive indices!!!"
-            assert torch.logical_or(ignored_background,
-                                  positive_indices).sum() == positive_indices.shape[0], "Some indices not in background, ignored or positive!!!"
-            dampening_factor[targets_max == -1] = 1.0
-            # Set noisy and ground_truth background to Dampening factor
-            dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
-            accepted_annotations_indices = dxy_argmin[positive_indices]
-            # accepted_annotations_status_forground = torch.squeeze(annotations[:, accepted_annotations_indices, -2]==-1)
-            # accepted_annotations_status_forground = torch.squeeze(annotations[:, accepted_annotations_indices, -2] != -1)
-            accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
-            # set ground_truth object and background to 1.0
-
-            dampening_factor[positive_indices] = torch.where(accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
-
+            dampening_factor = FocalLoss.get_dampening_factor(
+                annotations=annotations,
+                targets=targets,
+                positive_indices=positive_indices,
+                background_positive_indices=background_positive_indices,
+                min_distances_args=dxy_argmin,
+            )
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
             else:
@@ -235,6 +226,46 @@ class FocalLoss(nn.Module):
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
         return torch.stack(classification_losses).mean(dim=0, keepdim=True), \
-            torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
-            torch.stack(angle_distance_regression_losses).mean(
-                dim=0, keepdim=True)
+               torch.stack(xydistance_regression_losses).mean(dim=0, keepdim=True), \
+               torch.stack(angle_distance_regression_losses).mean(
+                   dim=0, keepdim=True)
+
+    @staticmethod
+    def get_positive_indices(annotation, min_distances, min_distances_args, accepted_dalpha):
+        positive_indices = torch.logical_and(
+            torch.le(min_distances, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
+            torch.le(accepted_dalpha, MAX_ANOT_ANCHOR_ANGLE_DISTANCE),
+        )
+        assigned_labels = annotation[min_distances_args, 3]
+        background_positive_indices = torch.logical_and(positive_indices, torch.eq(assigned_labels, -1))
+        foreground_positive_indices = torch.logical_and(positive_indices, torch.ne(assigned_labels, -1))
+        return foreground_positive_indices, background_positive_indices
+
+    @staticmethod
+    def get_assigned_annotations(annotation, positive_indices, min_distances_args):
+        d_argmin = min_distances_args[positive_indices.nonzero(as_tuple=True)[0]]
+        assigned_annotations = annotation[d_argmin, :]
+        return assigned_annotations
+
+    @staticmethod
+    def get_dampening_factor(annotations, targets, positive_indices, background_positive_indices, min_distances_args):
+        targets_max, _ = targets.max(axis=1)
+        ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
+        assert torch.logical_and(ignored_background, positive_indices).sum() == 0.0, "Overlap between positive indices and non positive indices!!!"
+        assert torch.logical_or(ignored_background,
+                                positive_indices).sum() == positive_indices.shape[0], "Some indices not in background, ignored or positive!!!"
+        assert torch.logical_and(positive_indices, background_positive_indices).sum() == 0.0
+
+        dampening_factor = torch.full(size=(targets.shape[0],), dtype=torch.float64, fill_value=DAMPENING_PARAMETER)
+        if torch.cuda.is_available():
+            dampening_factor = dampening_factor.cuda()
+        dampening_factor[targets_max == -1] = 1.0
+        dampening_factor[targets_max == 0] = DAMPENING_PARAMETER
+        dampening_factor[background_positive_indices] = 1.0
+        accepted_annotations_indices = min_distances_args[positive_indices]
+        accepted_annotations_status = torch.squeeze(annotations[:, accepted_annotations_indices, -1])
+        dampening_factor[positive_indices] = torch.where(
+            accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
+        return dampening_factor
+
+
