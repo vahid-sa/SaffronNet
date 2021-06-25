@@ -10,7 +10,7 @@ from math import inf
 import torch.optim as optim
 from torchvision import transforms
 import shutil
-
+import gc
 import retinanet.utils
 from retinanet import model
 from retinanet.dataloader import CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, Normalizer
@@ -358,6 +358,8 @@ class Training:
             fileModelIO.close()
             fileStateDictIO.close()
 
+            gc.collect()
+            torch.cuda.empty_cache()
             corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
                 trained_model=loaded_model,
             )
@@ -374,6 +376,8 @@ class Training:
                 class_dict=self.index_to_class,
             )
 
+            gc.collect()
+            torch.cuda.empty_cache()
             self.train(
                 checkpoint=state_dict,
                 save_model_path=self.model_path_pattern.format(i),
