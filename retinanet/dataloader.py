@@ -484,7 +484,7 @@ class Augmenter(object):
             in_bound = np.logical_and(x_in_bound, y_in_bound)
 
             new_annots = new_annots[in_bound, :]
-            for x, y, alpha, _ in new_annots:
+            for x, y, alpha, _, _ in new_annots:
                 imgaug_copy = std_draw_line(
                     imgaug_copy,
                     point=(x, y),
