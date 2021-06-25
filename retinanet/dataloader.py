@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
-from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, std_draw_points
+from utils.visutils import DrawMode, draw_line, get_alpha, get_dots, std_draw_line, std_draw_points, normalize_alpha
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 
@@ -274,7 +274,7 @@ class CSVDataset(Dataset):
             # some annotations have basically no width / height, skip them
             ctr_x = a['x']
             ctr_y = a['y']
-            alpha = a['alpha']
+            alpha = normalize_alpha(90 - a['alpha'])
             ground_truth_status = a["ground_truth"]
 
             # if (x2-x1) < 1 or (y2-y1) < 1:
@@ -441,9 +441,9 @@ class Augmenter(object):
         self.seq = iaa.Sequential([
             iaa.Affine(
                 scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
-                translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
-                rotate=(-25, 25),
-                shear=(-8, 8)
+                translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+                rotate=(-15, 15),
+                shear=(-4, 4)
             ),
             iaa.Fliplr(0.5),  # horizontal flips
             # color jitter, only affects the image
@@ -457,14 +457,14 @@ class Augmenter(object):
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
-                x0, y0, x1, y1 = get_dots(x, y, 90 - alpha, distance_thresh=60)
+                x0, y0, x1, y1 = get_dots(x, y, alpha, distance_thresh=60)
                 kps.append(Keypoint(x=x0, y=y0))
                 kps.append(Keypoint(x=x1, y=y1))
 
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
             image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
-
+            imgaug_copy = image_aug.copy()
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -474,8 +474,25 @@ class Augmenter(object):
                 x1, y1 = kp.x, kp.y
 
                 alpha = get_alpha(x0, y0, x1, y1)
-                new_annots[i//2, :NUM_VARIABLES] = x0, y0, 90 - alpha
+                new_annots[i//2,
+                           :NUM_VARIABLES] = x0, y0, alpha
 
+            x_in_bound = np.logical_and(
+                new_annots[:, 0] > 0, new_annots[:, 0] < image_aug.shape[1])
+            y_in_bound = np.logical_and(
+                new_annots[:, 1] > 0, new_annots[:, 1] < image_aug.shape[0])
+            in_bound = np.logical_and(x_in_bound, y_in_bound)
+
+            new_annots = new_annots[in_bound, :]
+            for x, y, alpha, _ in new_annots:
+                imgaug_copy = std_draw_line(
+                    imgaug_copy,
+                    point=(x, y),
+                    alpha=alpha,
+                    mode=DrawMode.Accept
+                )
+            cv.imwrite('/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(
+                np.random.randint(0, 1000)), imgaug_copy)
             sample = {'img': image_aug, 'annot': new_annots}
 
         return sample

@@ -38,6 +38,9 @@ def main(args=None):
         '--csv_val', help='Path to file containing validation annotations (optional, see readme)')
 
     parser.add_argument(
+        '--model', help='backbone for retinanet, must be "resnet" of "vgg"', type=str, default="vgg"
+    )
+    parser.add_argument(
         '--depth', help='Resnet depth, must be one of 18, 34, 50, 101, 152', type=int, default=50)
 
     parser.add_argument(
@@ -100,25 +103,33 @@ def main(args=None):
         dataloader_val = DataLoader(
             dataset_val, num_workers=2, collate_fn=collater, batch_sampler=sampler_val)
 
-    # Create the model
-    if parser.depth == 18:
-        retinanet = model.resnet18(
-            num_classes=dataset_train.num_classes(), pretrained=True)
-    elif parser.depth == 34:
-        retinanet = model.resnet34(
-            num_classes=dataset_train.num_classes(), pretrained=True)
-    elif parser.depth == 50:
-        retinanet = model.resnet50(
-            num_classes=dataset_train.num_classes(), pretrained=True)
-    elif parser.depth == 101:
-        retinanet = model.resnet101(
-            num_classes=dataset_train.num_classes(), pretrained=True)
-    elif parser.depth == 152:
-        retinanet = model.resnet152(
+    if parser.model == 'resnet':
+        # Create the model
+        if parser.depth == 18:
+            retinanet = model.resnet18(
+                num_classes=dataset_train.num_classes(), pretrained=True)
+        elif parser.depth == 34:
+            retinanet = model.resnet34(
+                num_classes=dataset_train.num_classes(), pretrained=True)
+        elif parser.depth == 50:
+            retinanet = model.resnet50(
+                num_classes=dataset_train.num_classes(), pretrained=True)
+        elif parser.depth == 101:
+            retinanet = model.resnet101(
+                num_classes=dataset_train.num_classes(), pretrained=True)
+        elif parser.depth == 152:
+            retinanet = model.resnet152(
+                num_classes=dataset_train.num_classes(), pretrained=True)
+        else:
+            raise ValueError(
+                'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
+
+    elif parser.model == 'vgg':
+        retinanet = model.vgg7(
             num_classes=dataset_train.num_classes(), pretrained=True)
     else:
         raise ValueError(
-            'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
+            "Unsupported model type, must be one of 'resnet' or 'vgg'")
 
     use_gpu = True
 
@@ -148,12 +159,14 @@ def main(args=None):
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
     retinanet.train()
-    retinanet.module.freeze_bn()
+    if parser.model == 'resnet':
+        retinanet.module.freeze_bn()
 
     print('Num training images: {}'.format(len(dataset_train)))
     for epoch_num in range(parser.epochs):
         retinanet.train()
-        retinanet.module.freeze_bn()
+        if parser.model == 'resnet':
+            retinanet.module.freeze_bn()
 
         epoch_loss = []
         epoch_CLASSIFICATION_loss = []
