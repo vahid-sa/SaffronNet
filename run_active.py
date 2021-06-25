@@ -208,24 +208,33 @@ class Training:
             dataset_train, num_workers=3, collate_fn=collater, batch_sampler=sampler)
 
         # Create the model
-        if self.args.depth == 18:
-            retinanet = model.resnet18(
-                num_classes=dataset_train.num_classes(), pretrained=True)
-        elif self.args.depth == 34:
-            retinanet = model.resnet34(
-                num_classes=dataset_train.num_classes(), pretrained=True)
-        elif self.args.depth == 50:
-            retinanet = model.resnet50(
-                num_classes=dataset_train.num_classes(), pretrained=True)
-        elif self.args.depth == 101:
-            retinanet = model.resnet101(
-                num_classes=dataset_train.num_classes(), pretrained=True)
-        elif self.args.depth == 152:
-            retinanet = model.resnet152(
+        if args.model_type == 'resnet':
+            # Create the model
+            if args.depth == 18:
+                retinanet = model.resnet18(
+                    num_classes=dataset_train.num_classes(), pretrained=True)
+            elif args.depth == 34:
+                retinanet = model.resnet34(
+                    num_classes=dataset_train.num_classes(), pretrained=True)
+            elif args.depth == 50:
+                retinanet = model.resnet50(
+                    num_classes=dataset_train.num_classes(), pretrained=True)
+            elif args.depth == 101:
+                retinanet = model.resnet101(
+                    num_classes=dataset_train.num_classes(), pretrained=True)
+            elif args.depth == 152:
+                retinanet = model.resnet152(
+                    num_classes=dataset_train.num_classes(), pretrained=True)
+            else:
+                raise ValueError(
+                    'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
+
+        elif args.model_type == 'vgg':
+            retinanet = model.vgg7(
                 num_classes=dataset_train.num_classes(), pretrained=True)
         else:
             raise ValueError(
-                'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
+                "Unsupported model type, must be one of 'resnet' or 'vgg'")
 
         if torch.cuda.is_available():
             retinanet = torch.nn.DataParallel(retinanet.cuda()).cuda()
@@ -405,6 +414,9 @@ if __name__ == "__main__":
                         default=20, help="Number of Epochs")
     parser.add_argument("--image-save-dir", type=str, required=True, dest="image_save_dir",
                         help="where to save images")
+    parser.add_argument(
+        '--model-type', help='backbone for retinanet, must be "resnet" of "vgg"', type=str, default="vgg", dest="model_type"
+    )
     args = parser.parse_args()
 
     trainer = Training(args=args)
