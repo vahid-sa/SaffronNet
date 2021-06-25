@@ -261,6 +261,8 @@ class Training:
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
+            gc.collect()
+            torch.cuda.empty_cache()
             retinanet.train()
             if self.args.model_type == "resnet":
                 retinanet.module.freeze_bn()
@@ -271,6 +273,8 @@ class Training:
             epoch_ANGLE_REG_loss = []
 
             for iter_num, data in enumerate(dataloader_train):
+                gc.collect()
+                torch.cuda.empty_cache()
                 try:
                     optimizer.zero_grad()
                     if torch.cuda.is_available():
