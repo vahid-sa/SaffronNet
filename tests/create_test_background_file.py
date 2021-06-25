@@ -30,14 +30,17 @@ def get_annotations(annot_path):
 
     annots = list()
     for row in csv_reader:
-        img_idx = int(row[0])
-        x = float(row[1])
-        y = float(row[2])
-        angle = float(row[3])
-        label = class_to_index[row[4]]
-        gt_status = get_gt_status(annot_row=row)
-        annotation = img_idx, x, y, angle, label, gt_status
-        annots.append(annotation)
+        try:
+            img_idx = int(row[0])
+            x = float(row[1])
+            y = float(row[2])
+            angle = float(row[3])
+            label = class_to_index[row[4]]
+            gt_status = get_gt_status(annot_row=row)
+            annotation = img_idx, x, y, angle, label, gt_status
+            annots.append(annotation)
+        except ValueError:
+            continue
     annots = np.asarray(annots, dtype=np.float64)
     fileIO.close()
     return annots
@@ -85,7 +88,7 @@ def write_annotations(annots, path):
         csv_writer.writerow(row)
 
 print("index_to_class", index_to_class)
-annotation_path = "../annotations/supervised.csv"
+annotation_path = "../annotations/unsupervised.csv"
 annotations = get_annotations(annot_path=annotation_path)
 
 img_indices = np.unique(annotations[:, 0].astype(np.int64))
@@ -93,4 +96,4 @@ bg_annots = generate_random_backgrounds(images_indices=img_indices)
 annotations = np.concatenate([annotations, bg_annots], axis=0)
 
 annotations = annotations[list(annotations[:, 0].astype(np.int64).argsort())]
-write_annotations(annots=annotations, path="../annotations/test_background")
+write_annotations(annots=annotations, path="../annotations/test_background.csv")
