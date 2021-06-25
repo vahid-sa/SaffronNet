@@ -89,10 +89,10 @@ def save_csv(path, object):
 # annots = read_all_file_annotations(file_paths)
 #
 # supervised, unsupervised, val, test = split_train_validation_test(
-#     supervised_train_coef=0.2,
+#     supervised_train_coef=0.1,
 #     unsupervised_train_coef=0.6,
-#     validation_coef=0.1,
-#     test_coef=0.1,
+#     validation_coef=0.15,
+#     test_coef=0.15,
 #     annots=annots)
 # if not osp.isdir("./annotations"):
 #     os.mkdir("./annotations")
@@ -101,7 +101,6 @@ def save_csv(path, object):
 # save_csv(path="./annotations/validation.csv", object=val)
 # save_csv(path="./annotations/test.csv", object=test)
 
-import pandas
 import json
 
 def get_file_names(file_path):
