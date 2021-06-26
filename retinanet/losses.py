@@ -1,7 +1,8 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, DAMPENING_PARAMETER
+from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
+import retinanet
 
 
 def prepare(a, b):
@@ -51,7 +52,7 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
-        print(f"dampening_parameter: {DAMPENING_PARAMETER}")
+        print(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
         alpha = 0.95
         gamma = 2.0
         batch_size = classifications.shape[0]
@@ -255,6 +256,7 @@ class FocalLoss(nn.Module):
 
     @staticmethod
     def get_dampening_factor(annotations, targets, positive_indices, background_positive_indices, min_distances_args):
+        DAMPENING_PARAMETER = retinanet.settings.DAMPENING_PARAMETER
         targets_max, _ = targets.max(axis=1)
         ignored_background = torch.logical_or((targets_max == -1), (targets_max == 0))
         assert torch.logical_and(ignored_background, positive_indices).sum() == 0.0, "Overlap between positive indices and non positive indices!!!"
