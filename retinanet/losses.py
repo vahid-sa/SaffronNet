@@ -51,6 +51,7 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations):
+        print(f"dampening_parameter: {DAMPENING_PARAMETER}")
         alpha = 0.95
         gamma = 2.0
         batch_size = classifications.shape[0]

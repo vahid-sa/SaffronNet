@@ -8,6 +8,7 @@ from retinanet.settings import NAME, SCORE, NUM_QUERIES, NOISY_THRESH
 
 def select_uncertain_indices(boxes, center_score=0.5):
     budget = NUM_QUERIES
+    print(f"budget: {NUM_QUERIES}")
     scores = np.abs(boxes[:, SCORE] - center_score)
     sort_arguments = scores.argsort()
     selected = sort_arguments[:budget]
@@ -16,6 +17,7 @@ def select_uncertain_indices(boxes, center_score=0.5):
 
 def select_noisy_indices(boxes, uncertain_selected_indices, previous_corrected_boxes_names):
     noisy_thresh = NOISY_THRESH
+    print(f"noisy_thresh: {noisy_thresh}")
     scores = boxes[:, SCORE]
     lower_bound = scores < noisy_thresh
     upper_bound = scores > 1 - noisy_thresh

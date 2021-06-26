@@ -22,7 +22,7 @@ import labeling
 from retinanet import utils
 from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
-from retinanet import settings
+import retinanet
 from visualize import draw_correct_noisy
 
 
@@ -96,7 +96,7 @@ class Training:
         return np.asarray(boxes[:, [NAME, X, Y, ALPHA, LABEL]], dtype=np.float64)
 
     @staticmethod
-    def detect(dataset, retinanet):
+    def detect(dataset, retinanet_model):
         """ Get the detections from the retinanet using the generator.
         The result is a list of lists such that the size is:
             all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
@@ -108,7 +108,7 @@ class Training:
         """
         all_detections = list()
 
-        retinanet.eval()
+        retinanet_model.eval()
 
         print("detecting")
         with torch.no_grad():
@@ -120,10 +120,10 @@ class Training:
 
                 # run network
                 if torch.cuda.is_available():
-                    scores, labels, boxes = retinanet(data['img'].permute(
+                    scores, labels, boxes = retinanet_model(data['img'].permute(
                         2, 0, 1).cuda().float().unsqueeze(dim=0))
                 else:
-                    scores, labels, boxes = retinanet(
+                    scores, labels, boxes = retinanet_model(
                         data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
                 scores = scores.cpu().numpy()
                 labels = labels.cpu().numpy()
@@ -150,7 +150,7 @@ class Training:
             trained_model: model,
     ) -> Tuple[np.array, np.array]:
         groundtruth_annotations_path = self.unsupervised_file
-        pred_boxes = Training.detect(dataset=self.loader, retinanet=trained_model)
+        pred_boxes = Training.detect(dataset=self.loader, retinanet_model=trained_model)
         previous_corrected_annotations = None
         if osp.isfile(self.corrected_annotations_file):
             previous_corrected_annotations = self.load_annotations(self.corrected_annotations_file)
@@ -213,61 +213,61 @@ class Training:
         if self.args.model_type == 'resnet':
             # Create the model
             if self.args.depth == 18:
-                retinanet = model.resnet18(
+                retinanet_model = model.resnet18(
                     num_classes=dataset_train.num_classes(), pretrained=True)
             elif self.args.depth == 34:
-                retinanet = model.resnet34(
+                retinanet_model = model.resnet34(
                     num_classes=dataset_train.num_classes(), pretrained=True)
             elif self.args.depth == 50:
-                retinanet = model.resnet50(
+                retinanet_model = model.resnet50(
                     num_classes=dataset_train.num_classes(), pretrained=True)
             elif self.args.depth == 101:
-                retinanet = model.resnet101(
+                retinanet_model = model.resnet101(
                     num_classes=dataset_train.num_classes(), pretrained=True)
             elif self.args.depth == 152:
-                retinanet = model.resnet152(
+                retinanet_model = model.resnet152(
                     num_classes=dataset_train.num_classes(), pretrained=True)
             else:
                 raise ValueError(
                     'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
 
         elif self.args.model_type == 'vgg':
-            retinanet = model.vgg7(
+            retinanet_model = model.vgg7(
                 num_classes=dataset_train.num_classes(), pretrained=True)
         else:
             raise ValueError(
                 "Unsupported model type, must be one of 'resnet' or 'vgg'")
 
         if torch.cuda.is_available():
-            retinanet = torch.nn.DataParallel(retinanet.cuda()).cuda()
+            retinanet_model = torch.nn.DataParallel(retinanet_model.cuda()).cuda()
         else:
-            retinanet = torch.nn.DataParallel(retinanet)
+            retinanet_model = torch.nn.DataParallel(retinanet_model)
 
-        optimizer = optim.Adam(retinanet.parameters(), lr=1e-5)
+        optimizer = optim.Adam(retinanet_model.parameters(), lr=1e-5)
 
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, patience=3, verbose=True)
         # checkpoint = torch.load(previous_state_dict_path)
-        retinanet.load_state_dict(checkpoint['model_state_dict'])
+        retinanet_model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
-        retinanet.train()
+        retinanet_model.train()
         if self.args.model_type == "resnet":
-            retinanet.module.freeze_bn()
+            retinanet_model.module.freeze_bn()
 
         print('Num training images: {}'.format(len(dataset_train)))
         loss_hist = []
-        init_mAP = csv_eval.evaluate(self.dataset_val, retinanet)
+        init_mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
         print("init_mAP", init_mAP)
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
             gc.collect()
             torch.cuda.empty_cache()
-            retinanet.train()
+            retinanet_model.train()
             if self.args.model_type == "resnet":
-                retinanet.module.freeze_bn()
+                retinanet_model.module.freeze_bn()
 
             epoch_loss = []
             epoch_CLASSIFICATION_loss = []
@@ -280,10 +280,10 @@ class Training:
                 try:
                     optimizer.zero_grad()
                     if torch.cuda.is_available():
-                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
+                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
                             [data['img'].cuda().float(), data['annot']])
                     else:
-                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(
+                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
                             [data['img'].float(), data['annot']])
                     classification_loss = classification_loss.mean()
                     xydistance_regression_loss = xydistance_regression_loss.mean()
@@ -297,7 +297,7 @@ class Training:
 
                     loss.backward()
 
-                    torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
+                    torch.nn.utils.clip_grad_norm_(retinanet_model.parameters(), 0.1)
 
                     optimizer.step()
 
@@ -327,7 +327,7 @@ class Training:
                 print("loss improved from {} to {}".format(min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
 
-            mAP = csv_eval.evaluate(self.dataset_val, retinanet)
+            mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
             if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
@@ -335,7 +335,7 @@ class Training:
                 save_models(
                     model_path=save_model_path,
                     state_dict_path=save_state_dict_path,
-                    model=retinanet,
+                    model=retinanet_model,
                     optimizer=optimizer,
                     scheduler=scheduler,
                     loss=np.mean(epoch_loss),
@@ -351,18 +351,13 @@ class Training:
                         os.path.join(os.path.dirname(self.args.save_dir), 'history.json'))
             scheduler.step(np.mean(epoch_loss))
 
-        retinanet.eval()
+        retinanet_model.eval()
         if self.args.save_dir:
-            torch.save(retinanet, os.path.join(self.args.save_dir, 'model_final.pt'))
+            torch.save(retinanet_model, os.path.join(self.args.save_dir, 'model_final.pt'))
         else:
-            torch.save(retinanet, 'model_final.pt')
+            torch.save(retinanet_model, 'model_final.pt')
 
     def manage_cycles(self):
-        settings.DAMPENING_PARAMETER = self.args.dampening_param
-        settings.NUM_QUERIES = self.args.num_queries
-        settings.NOISY_THRESH = self.args.noisy_thresh
-
-        print("Dampening parameter value: {0}\nBudget: {1}\nNoisy threshold value: {2}".format(settings.DAMPENING_PARAMETER, settings.NUM_QUERIES, settings.NOISY_THRESH))
 
         for i in range(1, self.args.num_cycles + 1):
             self.cycle_number = i
@@ -437,6 +432,10 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--noisy-thresh', type=float, required=True, dest='noisy_thresh',
                         help='noisy threshold')
     args = parser.parse_args()
+
+    retinanet.settings.DAMPENING_PARAMETER = args.dampening_param
+    retinanet.settings.NUM_QUERIES = args.num_queries
+    retinanet.settings.NOISY_THRESH = args.noisy_thresh
 
     trainer = Training(args=args)
     trainer.manage_cycles()
