@@ -22,6 +22,7 @@ import labeling
 from retinanet import utils
 from utils.meta_utils import save_models
 from retinanet.settings import NAME, X, Y, ALPHA, LABEL
+from retinanet import settings
 from visualize import draw_correct_noisy
 
 
@@ -59,6 +60,7 @@ class Training:
 
         self.args = args
         self.cycle_number: int
+
 
     @staticmethod
     def get_model_saving_pattern(saving_model_dir: str) -> Tuple[str, str]:
@@ -356,6 +358,12 @@ class Training:
             torch.save(retinanet, 'model_final.pt')
 
     def manage_cycles(self):
+        settings.DAMPENING_PARAMETER = self.args.dampening_param
+        settings.NUM_QUERIES = self.args.num_queries
+        settings.NOISY_THRESH = self.args.noisy_thresh
+
+        print("Dampening parameter value: {0}\nBudget: {1}\nNoisy threshold value: {2}".format(settings.DAMPENING_PARAMETER, settings.NUM_QUERIES, settings.NOISY_THRESH))
+
         for i in range(1, self.args.num_cycles + 1):
             self.cycle_number = i
             print("\nCycle {0}\n".format(i))
@@ -420,10 +428,14 @@ if __name__ == "__main__":
                         default=20, help="Number of Epochs")
     parser.add_argument("--image-save-dir", type=str, required=True, dest="image_save_dir",
                         help="where to save images")
-    parser.add_argument(
-        '--model-type', help='backbone for retinanet, must be "resnet" of "vgg"', type=str, default="vgg",
-        dest="model_type"
-    )
+    parser.add_argument('--model-type', type=str, default="vgg", dest="model_type",
+                        help='backbone for retinanet, must be "resnet" of "vgg"')
+    parser.add_argument('-f', '--dampening-factor', type=float, dest='dampening_param', required=True,
+                        help='dampaening parameter')
+    parser.add_argument('-q', "--num-queries", type=int, default=100, dest='num_queries',
+                        help="number of Asking boxes per cycle")
+    parser.add_argument('-n', '--noisy-thresh', type=float, required=True, dest='noisy_thresh',
+                        help='noisy threshold')
     args = parser.parse_args()
 
     trainer = Training(args=args)
