@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import gc
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
 
@@ -26,7 +27,12 @@ def distance(ax, bx):
     -------
     (N, K) ndarray of distance between all x in ax, bx
     """
+    gc.collect()
+    torch.cuda.empty_cache()
     ax, bx = prepare(ax, bx)
+
+    gc.collect()
+    torch.cuda.empty_cache()
     return torch.abs(ax - bx)
 
 
@@ -67,6 +73,8 @@ class FocalLoss(nn.Module):
         anchor_alpha = anchor[:, 2]
         for j in range(batch_size):
 
+            gc.collect()
+            torch.cuda.empty_cache()
             classification = classifications[j, :, :]
             regression = regressions[j, :, :]
             center_alpha_annotation = annotations[j, :, :]
@@ -106,6 +114,8 @@ class FocalLoss(nn.Module):
                     angle_distance_regression_losses.append(
                         torch.tensor(0).float())
                 continue
+            gc.collect()
+            torch.cuda.empty_cache()
             dxy, dalpha = calc_distance(
                 anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1

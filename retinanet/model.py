@@ -4,6 +4,7 @@ import math
 import numpy as np
 import cv2 as cv
 import os
+import gc
 import torch.utils.model_zoo as model_zoo
 from retinanet.nms import nms, filter
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
@@ -280,6 +281,8 @@ class ResNet(nn.Module):
         classification = self.classificationModel(x2)
         anchors = self.anchors(img_batch)
 
+        gc.collect()
+        torch.cuda.empty_cache()
         if self.training:
             return self.focalLoss(classification, regression, anchors, annotations)
         else:
