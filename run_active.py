@@ -309,8 +309,12 @@ class Training:
                     epoch_ANGLE_REG_loss.append(
                         float(angle_distance_regression_losses))
                     print(
-                        'Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
-                            epoch_num, iter_num, float(classification_loss), float(xydistance_regression_loss),
+                        'Cycle: {} | Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
+                            self.cycle_number,
+                            epoch_num,
+                            iter_num,
+                            float(classification_loss),
+                            float(xydistance_regression_loss),
                             float(angle_distance_regression_losses), loss))
 
                     del classification_loss
@@ -361,7 +365,6 @@ class Training:
 
         for i in range(1, self.args.num_cycles + 1):
             self.cycle_number = i
-            print("\nCycle {0}\n".format(i))
             if i == 1:
                 model_path = self.args.model
                 state_dict_path = self.args.state_dict
