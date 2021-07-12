@@ -1,7 +1,9 @@
+import os
 import numpy as np
 import torch
 import torchvision
 import cv2 as cv
+import shutil
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
@@ -173,7 +175,7 @@ def load_random_sample(annotations, imgs_dir, ext=".jpg"):
 def draw(img, boxes, augmented=False):
     im = img.copy()
     for box in boxes:
-        x, y, alpha = box[1:NUM_VARIABLES]
+        x, y, alpha = box[1:NUM_VARIABLES+1]
         p = (x, y)
         center_color = (0, 0, 0)
         if augmented:
@@ -187,7 +189,7 @@ def draw(img, boxes, augmented=False):
 def main(args):
     loader = imageloader.CSVDataset(
         filenames_path="annotations/filenames.json",
-        partition="unsupervised",
+        partition="supervised",
         class_list="annotations/labels.csv",
         images_dir=args.image_dir,
         image_extension=args.ext,
@@ -196,8 +198,25 @@ def main(args):
     fileModelIO = open(args.model, "rb")
     loaded_model = torch.load(fileModelIO)
     detections = detect(dataset=loader, retinanet_model=loaded_model)
-    print("detections", detections.keys())
 
+    print('writting images:')
+    if osp.isdir(args.save_dir):
+        shutil.rmtree(args.save_dir)
+    os.makedirs(args.save_dir)
+    for index in range(len(loader)):
+        data = loader[index]
+        img_name = data['name']
+        img_load_path = osp.join(args.image_dir, img_name + args.ext)
+        img_save_path = osp.join(args.save_dir, img_name + args.ext)
+        img = cv.imread(img_load_path)
+        img_name = int(img_name)
+        default_det = detections['default'][detections['default'][:, 0] == img_name]
+        aug_det = detections['augmented'][detections['augmented'][:, 0] == img_name]
+        img = draw(img=img, boxes=default_det, augmented=False)
+        img = draw(img=img, boxes=aug_det, augmented=True)
+        cv.imwrite(img_save_path, img)
+        print('\rdone {0}'.format(index), end='')
+    print('done')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -207,6 +226,8 @@ if __name__ == '__main__':
                         choices=[".jpg", ".png"], help="image extension")
     parser.add_argument("-m", "--model", required=True, type=str, dest="model",
                         help="path to the model")
+    parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
+                        help="where to save output")
     arguments = parser.parse_args()
     main(args=arguments)
 
