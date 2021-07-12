@@ -192,7 +192,7 @@ def main(args):
         image_extension=args.ext,
         transform=torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
     )
-    fileModelIO = open(args.model_path, "rb")
+    fileModelIO = open(args.model, "rb")
     loaded_model = torch.load(fileModelIO)
     detections = detect(dataset=loader, retinanet_model=loaded_model)
     print("detections", detections.keys())
