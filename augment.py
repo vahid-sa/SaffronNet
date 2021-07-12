@@ -31,7 +31,7 @@ class Augmenter(object):
             #     rotate=(-15, 15),
             #     shear=(-4, 4)
             # ),
-            iaa.Flipud(1.0),  # horizontal flips
+            iaa.Fliplr(1.0),  # horizontal flips
             # color jitter, only affects the image
             # iaa.AddToHueAndSaturation((-50, 50))
         ])
@@ -153,7 +153,7 @@ def detect(dataset, retinanet_model):
 def augment_detector(data, retinanet_model):
     aug = Augmenter()
     augmented_data = copy.deepcopy(data)
-    augmented_data['img'] = augmented_data['img'][:, ::-1, ::]
+    augmented_data['img'] = torch.flip(augmented_data['img'], (1,))
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
     sample = aug(sample={'img': augmented_data['img'], 'annot': det})
     det = sample['annot']
