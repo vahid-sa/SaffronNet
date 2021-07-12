@@ -75,13 +75,13 @@ class Augmenter(object):
         in_bound = np.logical_and(x_in_bound, y_in_bound)
 
         new_annots = new_annots[in_bound, :]
-        for x, y, alpha in new_annots:
-            imgaug_copy = std_draw_line(
-                imgaug_copy,
-                point=(x, y),
-                alpha=alpha,
-                mode=DrawMode.Accept
-            )
+        # for x, y, alpha in new_annots:
+        #     imgaug_copy = std_draw_line(
+        #         imgaug_copy,
+        #         point=(x, y),
+        #         alpha=alpha,
+        #         mode=DrawMode.Accept
+        #     )
         # cv.imwrite('./aug_imgs/{}.png'.format(
         #     np.random.randint(0, 1000)), imgaug_copy)
         smpl = {'img': image_aug, 'annot': new_annots}
@@ -89,7 +89,7 @@ class Augmenter(object):
         return smpl
 
 
-def detect_one_image(retinanet_model, data):
+def detect_one_image(retinanet_model, data) -> list:
     scale = data['scale']
     img_name = float(int(data["name"]))
 
@@ -104,7 +104,7 @@ def detect_one_image(retinanet_model, data):
     labels = labels.cpu().numpy()
     boxes = boxes.cpu().numpy()
     if boxes.shape[0] == 0:
-        return None
+        return []
     # correct boxes for image scale
     boxes /= scale
 
@@ -117,7 +117,7 @@ def detect_one_image(retinanet_model, data):
         image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
     return image_detections.tolist()
 
-def detect(dataset, retinanet_model):
+def detect(dataset, retinanet_model) -> dict:
     """ Get the detections from the retinanet using the generator.
     The result is a list of lists such that the size is:
         all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
@@ -155,8 +155,9 @@ def augment_detector(data, retinanet_model):
     augmented_data = copy.deepcopy(data)
     augmented_data['img'] = torch.flip(augmented_data['img'], (1,))
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
-    sample = aug(sample={'img': augmented_data['img'], 'annot': det})
-    det = sample['annot']
+    if len(det) > 0:
+        sample = aug(sample={'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)})
+        det = sample['annot'].tolist()
     return det
 
 
@@ -198,7 +199,7 @@ def main(args):
     print("detections", detections.keys())
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
                         help="The directory where images are in.")
