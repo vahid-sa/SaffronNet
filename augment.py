@@ -154,8 +154,7 @@ def detect(dataset, retinanet_model) -> dict:
 
 def augment_detector(data, retinanet_model):
     aug = Augmenter()
-    augmented_data = copy.deepcopy(data)
-    augmented_data['img'] = torch.flip(augmented_data['img'], (1,))
+    augmented_data = {'img': data['aug_img'], 'name': data['name']}
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
     if len(det) > 0:
         sample = aug(sample={'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)})

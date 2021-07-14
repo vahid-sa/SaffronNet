@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import sys
 from os import path as osp
+import os
 import torch
 import numpy as np
 import random
@@ -9,12 +10,20 @@ import json
 
 from torch.utils.data import Dataset
 from torch.utils.data.sampler import Sampler
+import torchvision
 
 import skimage.io
 import skimage.transform
 import skimage.color
 import skimage
 import cv2 as cv
+
+import imgaug as ia
+import imgaug.augmenters as iaa
+from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
+
+from utils.visutils import get_alpha, get_dots, DrawMode, std_draw_line
+from retinanet.settings import NUM_VARIABLES
 
 
 
@@ -30,9 +39,11 @@ class CSVDataset(Dataset):
         """
         self.filenames = filenames_path
         self.class_list = class_list
-        self.transform = transform
+        self.transform = torchvision.transforms.Compose([Normalizer(), Resizer()])
+        self.augment_transform = torchvision.transforms.Compose([Augmenter, Normalizer, Resizer])
         self.img_dir = images_dir
         self.ext = image_extension
+        self.aug = Augmenter()
 
         # parse the provided class file
         try:
@@ -106,9 +117,12 @@ class CSVDataset(Dataset):
     def __getitem__(self, idx):
 
         img, img_name = self.load_image(idx)
-        sample = {'img': img, 'name':img_name}
-        if self.transform is not None:
-            sample = self.transform(sample)
+        augmented_img = img.copy()
+
+        orig_sample = self.transform({'img': img, })
+
+        aug_sample = self.augment_transform({'img': augmented_img, })
+        sample = {'img': orig_sample['img'], 'aug_img': aug_sample['img'], 'name': img_name}
 
         return sample
 
@@ -170,6 +184,7 @@ class Resizer(object):
 
     def __call__(self, sample, min_side=608, max_side=1024):
         image = sample['img']
+
 
         rows, cols, cns = image.shape
 
@@ -262,3 +277,92 @@ class AspectRatioBasedSampler(Sampler):
 
         # divide into groups, one group = one batch
         return [[order[x % len(order)] for x in range(i, i + self.batch_size)] for i in range(0, len(order), self.batch_size)]
+
+
+class Augmenter(object):
+    """Convert ndarrays in sample to Tensors."""
+    """ #
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        ia.seed(3)
+        self.seq = iaa.Sequential([
+            # iaa.Affine(
+            #     scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+            #     translate_percent={"x": (-0.1, 0.1), "y": (-0.1, 0.1)},
+            #     rotate=(-15, 15),
+            #     shear=(-4, 4)
+            # ),
+            iaa.Fliplr(1.0),  # horizontal flips
+            # color jitter, only affects the image
+            # iaa.AddToHueAndSaturation((-50, 50))
+        ])
+
+    def __call__(self, sample):
+        if not ('annot' in sample.keys()):
+            smpl = {'img': self.seq(image=sample['img']), }
+            return smpl
+        image, annots = sample['img'], sample['annot']
+        new_annots = annots.copy()
+        kps = []
+        ###################
+        # Alphas = list()
+        ##################
+        for x, y, alpha in annots[:, 1:NUM_VARIABLES+1]:
+            x0, y0, x1, y1 = get_dots(x, y, alpha, distance_thresh=60)
+            kps.append(Keypoint(x=x0, y=y0))
+            kps.append(Keypoint(x=x1, y=y1))
+
+            ##########################################
+            # Alphas.append(alpha)
+            # Alphas.append(alpha)
+            # cv.circle(sample["img"], (x1, y1), 1, (0, 255, 0))
+            ##########################################
+
+        kpsoi = KeypointsOnImage(kps, shape=image.shape)
+
+        image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
+        #######################################
+        imgaug_copy = image_aug.copy()
+        # assert(len(Alphas) == (len(kpsoi_aug.keypoints)))
+        ###################################
+        for i, _ in enumerate(kpsoi_aug.keypoints):
+            if i % 2 == 1:
+                continue
+            kp = kpsoi_aug.keypoints[i]
+            x0, y0 = kp.x, kp.y
+            kp = kpsoi_aug.keypoints[i+1]
+            x1, y1 = kp.x, kp.y
+
+            alpha = get_alpha(x0, y0, x1, y1)
+            new_annots[i//2,
+            1:NUM_VARIABLES+1] = x0, y0, alpha # abs(180 - alpha)
+
+        x_in_bound = np.logical_and(
+            new_annots[:, 0] > 0, new_annots[:, 0] < image_aug.shape[1])
+        y_in_bound = np.logical_and(
+            new_annots[:, 1] > 0, new_annots[:, 1] < image_aug.shape[0])
+        in_bound = np.logical_and(x_in_bound, y_in_bound)
+
+        new_annots = new_annots[in_bound, :]
+        ##############################################
+        save_dir = "../visualization/aug_imgs"
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = osp.join(save_dir, "{}.png".format(np.random.randint(0, 1000)))
+        for x, y, alpha in new_annots:
+            imgaug_copy = std_draw_line(
+                imgaug_copy,
+                point=(x, y),
+                alpha=alpha,
+                mode=DrawMode.Accept
+            )
+        cv.imwrite(save_path, imgaug_copy)
+        ###############################################
+        smpl = {'img': image_aug, 'annot': new_annots}
+
+        return smpl
+
+    def augment_image(self, img):
+        return self.seq(image=img)
+
