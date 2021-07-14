@@ -71,12 +71,12 @@ class Augmenter(object):
                        1:NUM_VARIABLES+1] = x0, y0, alpha # abs(180 - alpha)
 
         x_in_bound = np.logical_and(
-            new_annots[:, 0] > 0, new_annots[:, 0] < image_aug.shape[1])
+            new_annots[:, 0] >= 0, new_annots[:, 0] < image_aug.shape[1])
         y_in_bound = np.logical_and(
-            new_annots[:, 1] > 0, new_annots[:, 1] < image_aug.shape[0])
+            new_annots[:, 1] >= 0, new_annots[:, 1] < image_aug.shape[0])
         in_bound = np.logical_and(x_in_bound, y_in_bound)
 
-        new_annots = new_annots[in_bound, :]
+        # new_annots = new_annots[in_bound, :]
         # for x, y, alpha in new_annots:
         #     imgaug_copy = std_draw_line(
         #         imgaug_copy,
@@ -154,7 +154,7 @@ def detect(dataset, retinanet_model) -> dict:
 
 def augment_detector(data, retinanet_model):
     aug = Augmenter()
-    augmented_data = {'img': data['aug_img'], 'name': data['name']}
+    augmented_data = {'img': data['aug_img'], 'name': data['name'], 'scale': data['scale']}
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
     if len(det) > 0:
         sample = aug(sample={'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)})

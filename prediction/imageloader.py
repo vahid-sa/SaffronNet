@@ -40,7 +40,7 @@ class CSVDataset(Dataset):
         self.filenames = filenames_path
         self.class_list = class_list
         self.transform = torchvision.transforms.Compose([Normalizer(), Resizer()])
-        self.augment_transform = torchvision.transforms.Compose([Augmenter, Normalizer, Resizer])
+        self.augment_transform = torchvision.transforms.Compose([Augmenter(), Normalizer(), Resizer()])
         self.img_dir = images_dir
         self.ext = image_extension
         self.aug = Augmenter()
@@ -119,10 +119,11 @@ class CSVDataset(Dataset):
         img, img_name = self.load_image(idx)
         augmented_img = img.copy()
 
-        orig_sample = self.transform({'img': img, })
+        orig_sample = self.transform({'img': img, 'name': img_name})
 
-        aug_sample = self.augment_transform({'img': augmented_img, })
-        sample = {'img': orig_sample['img'], 'aug_img': aug_sample['img'], 'name': img_name}
+        aug_sample = self.augment_transform({'img': augmented_img, 'name': img_name})
+        sample = orig_sample
+        sample["aug_img"] = aug_sample["img"]
 
         return sample
 
@@ -301,7 +302,7 @@ class Augmenter(object):
 
     def __call__(self, sample):
         if not ('annot' in sample.keys()):
-            smpl = {'img': self.seq(image=sample['img']), }
+            smpl = {'img': self.seq(image=sample['img']), "name":sample["name"]}
             return smpl
         image, annots = sample['img'], sample['annot']
         new_annots = annots.copy()
