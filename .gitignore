@@ -104,3 +104,6 @@ ENV/
 
 
 predict.py
+aug_imgs/
+plots/history.json
+tests/test_augmentation.py

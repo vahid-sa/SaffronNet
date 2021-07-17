@@ -33,7 +33,11 @@ def distance(ax, bx):
 
     gc.collect()
     torch.cuda.empty_cache()
-    return torch.abs(ax - bx)
+    if (ax.get_device() != -1) and (bx.get_device() != -1):
+        dist = torch.abs(ax.cpu() - bx.cpu()).cuda()
+    else:
+        dist = torch.abs(ax - bx)
+    return dist
 
 
 def calc_distance(a, b):
