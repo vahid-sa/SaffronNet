@@ -25,14 +25,17 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
     scores = scores[scores_over_thresh]
     predictions = predictions[scores_over_thresh]
 
-    x = predictions[:, 0]
-    y = predictions[:, 1]
+    x = predictions[:, 0].cpu()
+    y = predictions[:, 1].cpu()
     dx = distance(ax=x, bx=x)
     dy = distance(ax=y, bx=y)
     dxy = t.sqrt(dx*dx + dy*dy)
+    del x, y, dx, dy
     for i in range(dxy.shape[0]):
         filter_row = t.logical_and(-0.01 < dxy[i, :], dxy[i, :] < max_distance)
         filter_row = filter_row.nonzero(as_tuple=True)[0]
+        if t.cuda.is_available():
+            filter_row = filter_row.cuda()
         candidate_scores = scores[filter_row]
         if candidate_scores.shape[0] == 0:
             continue

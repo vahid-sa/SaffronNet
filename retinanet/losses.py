@@ -29,31 +29,34 @@ def distance(ax, bx):
     """
     gc.collect()
     torch.cuda.empty_cache()
-    ax, bx = prepare(ax, bx)
+    ax_prepared, bx_prepared = prepare(ax, bx)
 
     gc.collect()
     torch.cuda.empty_cache()
-    if (ax.get_device() != -1) and (bx.get_device() != -1):
-        dist = torch.abs(ax.cpu() - bx.cpu()).cuda()
-    else:
-        dist = torch.abs(ax - bx)
+
+    sub = ax_prepared - bx_prepared
+    dist = torch.abs(sub)
     return dist
 
 
 def calc_distance(a, b):
     ax = a[:, 0]
     bx = b[:, 0]
+    dx = distance(ax=ax, bx=bx)
+    del ax, bx
 
     ay = a[:, 1]
     by = b[:, 1]
+    dy = distance(ax=ay, bx=by)
+    del ay, by
 
     aa = a[:, 2]
     ba = b[:, 2]
-
     dalpha = distance(ax=aa, bx=ba)
-    dx = distance(ax=ax, bx=bx)
-    dy = distance(ax=ay, bx=by)
+    del aa, ba
+
     dxy = torch.sqrt(dx*dx + dy*dy)
+    del dx, dy
 
     return dxy,  dalpha
 
@@ -120,9 +123,17 @@ class FocalLoss(nn.Module):
                 continue
             gc.collect()
             torch.cuda.empty_cache()
+            anchors_for_calc_distance = anchors[0, :, :].cpu()
+            center_alpha_annotation_for_calc_distance = center_alpha_annotation[:, :NUM_VARIABLES].cpu()
             dxy, dalpha = calc_distance(
-                anchors[0, :, :], center_alpha_annotation[:, :NUM_VARIABLES])
+                anchors_for_calc_distance, center_alpha_annotation_for_calc_distance)
             dxy_min, dxy_argmin = torch.min(dxy, dim=1)  # num_anchors x 1
+            a = dalpha[range(dalpha.shape[0]), dxy_argmin]
+            if torch.cuda.is_available():
+                dxy_min = dxy_min.cuda()
+                dxy_argmin = dxy_argmin.cuda()
+                a = a.cuda()
+            del anchors_for_calc_distance, center_alpha_annotation_for_calc_distance, dxy, dalpha
 
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
@@ -131,7 +142,6 @@ class FocalLoss(nn.Module):
             # -----------------------------------------------------------------------
             targets[torch.ge(
                 dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
-            a = dalpha[range(dalpha.shape[0]), dxy_argmin]
             targets[torch.ge(
                 a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
 
