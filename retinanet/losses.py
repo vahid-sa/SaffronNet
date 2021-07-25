@@ -9,8 +9,9 @@ import retinanet
 def absolute(tensor: torch.tensor, large_matrix: bool):
     if large_matrix:
         print("large matrix shape: {0}".format(tensor.shape))
-        denominator = 100
+        denominator = 5
         for i in range(int(tensor.shape[0] / denominator)):
+            gc.collect()
             lower_range = i * denominator
             upper_range = (i + 1) * denominator
             tensor[lower_range:upper_range, :] = torch.abs(tensor[lower_range:upper_range, :])
