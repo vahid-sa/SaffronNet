@@ -6,6 +6,15 @@ from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_AN
 import retinanet
 
 
+def absolute(tensor: torch.tensor):
+    row_index = int(len(tensor.shape[0]) / 2)
+    col_index = int(len(tensor.shape[1]) / 2)
+    tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
+    tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, :col_index])
+    tensor[row_index:, :col_index] = torch.abs(tensor[:row_index, :col_index])
+    tensor[row_index:, col_index:] = torch.abs(tensor[:row_index, :col_index])
+    
+
 def prepare(a, b):
     # extend as cols
     repetitions = b.shape[0]
@@ -38,8 +47,7 @@ def distance(ax, bx):
     del ax_prepared, bx_prepared
     gc.collect()
     torch.cuda.empty_cache()
-    # torch.abs(input=dist, out=dist)
-    torch.where()
+    absolute(tensor=dist)
     return dist
 
 
