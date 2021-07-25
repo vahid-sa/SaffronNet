@@ -28,11 +28,11 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
 
     x = predictions[:, 0].cpu()
     gc.collect()
-    dx = distance(ax=x, bx=x)
+    dx = distance(ax=x, bx=x, large_matrix=True)
     del x
     y = predictions[:, 1].cpu()
     gc.collect()
-    dy = distance(ax=y, bx=y)
+    dy = distance(ax=y, bx=y, large_matrix=True)
     del y
     gc.collect()
     dxy = t.sqrt(dx*dx + dy*dy)

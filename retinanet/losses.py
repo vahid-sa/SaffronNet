@@ -6,13 +6,21 @@ from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_AN
 import retinanet
 
 
-def absolute(tensor: torch.tensor):
-    row_index = int(tensor.shape[0] / 2)
-    col_index = int(tensor.shape[1] / 2)
-    tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
-    tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, col_index:])
-    tensor[row_index:, :col_index] = torch.abs(tensor[row_index:, :col_index])
-    tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
+def absolute(tensor: torch.tensor, large_matrix: bool):
+    if large_matrix:
+        print("large matrix shape: {0}".format(tensor.shape))
+        denominator = 100
+        for i in range(int(tensor.shape[0] / denominator)):
+            lower_range = i * denominator
+            upper_range = (i + 1) * denominator
+            tensor[lower_range:upper_range, :] = torch.abs(tensor[lower_range:upper_range, :])
+    else:
+        row_index = int(tensor.shape[0] / 2)
+        col_index = int(tensor.shape[1] / 2)
+        tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
+        tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, col_index:])
+        tensor[row_index:, :col_index] = torch.abs(tensor[row_index:, :col_index])
+        tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
     
 
 def prepare(a, b):
@@ -28,7 +36,7 @@ def prepare(a, b):
     return at, bt
 
 
-def distance(ax, bx):
+def distance(ax, bx, large_matrix: bool = False):
     """
     ax: (N) ndarray of float
     bx: (K) ndarray of float
@@ -47,7 +55,7 @@ def distance(ax, bx):
     del ax_prepared, bx_prepared
     gc.collect()
     torch.cuda.empty_cache()
-    absolute(tensor=dist)
+    absolute(tensor=dist, large_matrix=large_matrix)
     return dist
 
 
