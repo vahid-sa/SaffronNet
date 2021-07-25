@@ -7,6 +7,7 @@ import retinanet
 
 
 def absolute(tensor: torch.tensor, large_matrix: bool):
+    """
     if large_matrix:
         # print("large matrix shape: {0}".format(tensor.shape))
         # denominator = 5
@@ -25,6 +26,13 @@ def absolute(tensor: torch.tensor, large_matrix: bool):
         tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, col_index:])
         tensor[row_index:, :col_index] = torch.abs(tensor[row_index:, :col_index])
         tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
+    """
+    row_index = int(tensor.shape[0] / 2)
+    col_index = int(tensor.shape[1] / 2)
+    tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
+    tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, col_index:])
+    tensor[row_index:, :col_index] = torch.abs(tensor[row_index:, :col_index])
+    tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
     
 
 def prepare(a, b):
