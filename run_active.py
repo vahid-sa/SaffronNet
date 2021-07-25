@@ -331,11 +331,6 @@ class Training:
                 print("loss improved from {} to {}".format(min_loss, mean_epoch_loss))
                 min_loss = mean_epoch_loss
 
-            mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
-            if mAP[0][0] > max_mAp:
-                print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
-                max_mAp = mAP[0][0]
-
                 save_models(
                     model_path=save_model_path,
                     state_dict_path=save_state_dict_path,
@@ -343,15 +338,31 @@ class Training:
                     optimizer=optimizer,
                     scheduler=scheduler,
                     loss=np.mean(epoch_loss),
-                    mAP=max_mAp,
+                    mAP=-1,
                     epoch=epoch_num,
                 )
+
+            # mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
+            # if mAP[0][0] > max_mAp:
+            #     print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
+            #     max_mAp = mAP[0][0]
+            #
+            #     save_models(
+            #         model_path=save_model_path,
+            #         state_dict_path=save_state_dict_path,
+            #         model=retinanet_model,
+            #         optimizer=optimizer,
+            #         scheduler=scheduler,
+            #         loss=np.mean(epoch_loss),
+            #         mAP=max_mAp,
+            #         epoch=epoch_num,
+            #     )
 
             log_history(epoch_num,
                         {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
                          'rxy-loss': np.mean(epoch_XY_REG_loss),
                          'ra-loss': np.mean(epoch_ANGLE_REG_loss),
-                         'mAp': mAP},
+                         'mAp': -1},
                         os.path.join(os.path.dirname(self.args.save_dir), 'history.json'))
             scheduler.step(np.mean(epoch_loss))
 
