@@ -7,8 +7,8 @@ import retinanet
 
 
 def absolute(tensor: torch.tensor):
-    row_index = int(len(tensor.shape[0]) / 2)
-    col_index = int(len(tensor.shape[1]) / 2)
+    row_index = int(tensor.shape[0] / 2)
+    col_index = int(tensor.shape[1] / 2)
     tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
     tensor[:row_index, col_index:] = torch.abs(tensor[:row_index, :col_index])
     tensor[row_index:, :col_index] = torch.abs(tensor[:row_index, :col_index])
