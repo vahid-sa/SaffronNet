@@ -8,13 +8,16 @@ import retinanet
 
 def absolute(tensor: torch.tensor, large_matrix: bool):
     if large_matrix:
-        print("large matrix shape: {0}".format(tensor.shape))
-        denominator = 5
-        for i in range(int(tensor.shape[0] / denominator)):
-            gc.collect()
-            lower_range = i * denominator
-            upper_range = (i + 1) * denominator
-            tensor[lower_range:upper_range, :] = torch.abs(tensor[lower_range:upper_range, :])
+        # print("large matrix shape: {0}".format(tensor.shape))
+        # denominator = 5
+        # for i in range(int(tensor.shape[0] / denominator)):
+        #     gc.collect()
+        #     lower_range = i * denominator
+        #     upper_range = (i + 1) * denominator
+        #     tensor[lower_range:upper_range, :] = torch.abs(tensor[lower_range:upper_range, :])
+        for i in range(tensor.shape[0]):
+            for j in range(tensor.shape[1]):
+                tensor[i, j] = (tensor[i, j] ** 2) ** 0.5
     else:
         row_index = int(tensor.shape[0] / 2)
         col_index = int(tensor.shape[1] / 2)
