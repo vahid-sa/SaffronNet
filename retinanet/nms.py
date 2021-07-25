@@ -2,6 +2,7 @@ import numpy as np
 from torch._C import dtype
 from .losses import prepare, distance
 import torch as t
+import gc
 from .settings import MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 
 
@@ -26,16 +27,20 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
     predictions = predictions[scores_over_thresh]
 
     x = predictions[:, 0].cpu()
-    y = predictions[:, 1].cpu()
+    gc.collect()
     dx = distance(ax=x, bx=x)
+    del x
+    y = predictions[:, 1].cpu()
+    gc.collect()
     dy = distance(ax=y, bx=y)
+    del y
+    gc.collect()
     dxy = t.sqrt(dx*dx + dy*dy)
-    del x, y, dx, dy
+    del dx, dy
+    gc.collect()
     for i in range(dxy.shape[0]):
         filter_row = t.logical_and(-0.01 < dxy[i, :], dxy[i, :] < max_distance)
         filter_row = filter_row.nonzero(as_tuple=True)[0]
-        if t.cuda.is_available():
-            filter_row = filter_row.cuda()
         candidate_scores = scores[filter_row]
         if candidate_scores.shape[0] == 0:
             continue

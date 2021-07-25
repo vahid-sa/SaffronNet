@@ -34,8 +34,12 @@ def distance(ax, bx):
     gc.collect()
     torch.cuda.empty_cache()
 
-    sub = ax_prepared - bx_prepared
-    dist = torch.abs(sub)
+    dist = ax_prepared - bx_prepared
+    del ax_prepared, bx_prepared
+    gc.collect()
+    torch.cuda.empty_cache()
+    # torch.abs(input=dist, out=dist)
+    torch.where()
     return dist
 
 
