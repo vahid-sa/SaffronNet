@@ -1,14 +1,8 @@
 import argparse
 import torch
 from torchvision import transforms
-
-from retinanet import model
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
 from retinanet import csv_eval
-
-assert torch.__version__.split_uncertain_and_noisy('.')[0] == '1'
-
-print('CUDA available: {}'.format(torch.cuda.is_available()))
 
 
 def main(args=None):
@@ -18,11 +12,11 @@ def main(args=None):
     parser.add_argument('--model_path', help='Path to model', type=str)
     parser.add_argument('--images_path',help='Path to images directory',type=str)
     parser.add_argument('--class_list_path',help='Path to classlist csv',type=str)
-    parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=str, default='0.5')
+    parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=float, default=0.5)
     parser = parser.parse_args(args)
 
     #dataset_val = CocoDataset(parser.coco_path, set_name='val2017',transform=transforms.Compose([Normalizer(), Resizer()]))
-    dataset_val = CSVDataset(parser.csv_annotations_path,parser.class_list_path,transform=transforms.Compose([Normalizer(), Resizer()]))
+    dataset_val = CSVDataset(parser.csv_annotations_path,parser.class_list_path,transform=transforms.Compose([Normalizer(), Resizer()]), images_dir=parser.images_path)
     # Create the model
     #retinanet = model.resnet50(num_classes=dataset_val.num_classes(), pretrained=True)
     retinanet=torch.load(parser.model_path)
@@ -42,10 +36,9 @@ def main(args=None):
 
     retinanet.training = False
     retinanet.eval()
-    retinanet.module.freeze_bn()
+    # retinanet.module.freeze_bn()
 
-    print(csv_eval.evaluate(dataset_val, retinanet,iou_threshold=float(parser.iou_threshold)))
-
+    print("Average precision:", csv_eval.evaluate(dataset_val, retinanet))
 
 
 if __name__ == '__main__':

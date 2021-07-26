@@ -27,6 +27,12 @@ def absolute(tensor: torch.tensor, large_matrix: bool):
         tensor[row_index:, :col_index] = torch.abs(tensor[row_index:, :col_index])
         tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
     """
+    # if large_matrix:
+    print("large matrix:", tensor.shape)
+    #    # for i in range(tensor.shape[0]):
+    #    #     for j in range(tensor.shape[1]):
+    #    #         tensor[i, j] = tensor[i, j] ** 2
+    #    #         tensor[i, j] = tensor[i, j] ** 0.5
     row_index = int(tensor.shape[0] / 2)
     col_index = int(tensor.shape[1] / 2)
     tensor[:row_index, :col_index] = torch.abs(tensor[:row_index, :col_index])
