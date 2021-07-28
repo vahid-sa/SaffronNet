@@ -41,6 +41,7 @@ class Augmenter(object):
 
     def __call__(self, sample):
         image, annots = sample['img'], sample['annot']
+        print("orig_image:", image.shape, image.dtype)
         new_annots = annots.copy()
         kps = []
         # Alphas = list()
@@ -55,6 +56,7 @@ class Augmenter(object):
         kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
         image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
+        print("image_aug:", image_aug.shape, image_aug.dtype)
         imgaug_copy = image_aug.copy()
         # assert(len(Alphas) == (len(kpsoi_aug.keypoints)))
         for i, _ in enumerate(kpsoi_aug.keypoints):
@@ -70,14 +72,14 @@ class Augmenter(object):
             # alpha = beta % 180 if Alphas[i] > 180 else beta
             new_annots[i//2,
                        1:NUM_VARIABLES+1] = x0, y0, alpha # abs(180 - alpha)
-
+        print("image_aug", image_aug.shape, image_aug.dtype)
         x_in_bound = np.logical_and(
-            new_annots[:, 0] >= 0, new_annots[:, 0] < image_aug.shape[1])
+            new_annots[:, 1] >= 0, new_annots[:, 1] < image_aug.shape[1])
         y_in_bound = np.logical_and(
-            new_annots[:, 1] >= 0, new_annots[:, 1] < image_aug.shape[0])
+            new_annots[:, 2] >= 0, new_annots[:, 2] < image_aug.shape[0])
         in_bound = np.logical_and(x_in_bound, y_in_bound)
 
-        # new_annots = new_annots[in_bound, :]
+        new_annots = new_annots[in_bound, :]
         # for x, y, alpha in new_annots:
         #     imgaug_copy = std_draw_line(
         #         imgaug_copy,
@@ -140,6 +142,7 @@ def detect(dataset, retinanet_model) -> dict:
 
         for index in range(len(dataset)):
             data = dataset[index]
+            print(data["img"].shape)
             image_detections = detect_one_image(retinanet_model=retinanet_model, data=data)
             all_detections.extend(image_detections)
             augmented_image_detections = augment_detector(retinanet_model=retinanet_model, data=data)
@@ -160,7 +163,7 @@ def augment_detector(data, retinanet_model):
     augmented_data = {'img': data['aug_img'], 'name': data['name'], 'scale': data['scale']}
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
     if len(det) > 0:
-        sample = {'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)}
+        sample = {'img': data["only_aug_img"], 'annot': np.array(det)}
         img = data["only_aug_img"][:, :, ::-1]
         annot = sample['annot']
         img = draw(img=img, boxes=annot, augmented=True)
@@ -238,46 +241,3 @@ if __name__ == '__main__':
                         help="where to save output")
     arguments = parser.parse_args()
     main(args=arguments)
-
-
-
-
-
-
-"""
-parser = argparse.ArgumentParser()
-parser.add_argument("-d", "--image-dir", help="images directory", required=True, type=str, dest="image_dir")
-args = parser.parse_args()
-f = open("annotations/unsupervised.csv")
-csv_reader = csv.reader(f, delimiter=',')
-annots = dict()
-for i, row in enumerate(csv_reader):
-    print(i, end="    ")
-    key = row[0]
-    try:
-        annot = np.asarray([[int(float(row[1])), int(float(row[2])), 90 - int(float(row[3]))], ], dtype=np.int64)
-    except ValueError:
-        print("\nrow\n",row)
-        continue
-    if not (key in annots.keys()):
-        annots[key] = annot
-    else:
-        annots[key] = np.concatenate([annots[key], annot], axis=0)
-f.close()
-
-aug = Augmenter()
-origin_sample = load_random_sample(annotations=annots, imgs_dir=args.image_dir)
-aug_sample = aug(sample=origin_sample)
-aug_aug_sample = aug(sample=aug_sample)
-
-orig_img = draw(img=origin_sample['img'], boxes=origin_sample['annot'])
-aug_img = draw(img=aug_sample['img'], boxes=aug_sample['annot'])
-aug_aug_img = draw(img=aug_aug_sample['img'], boxes=aug_aug_sample['annot'])
-
-
-cv.imshow("orig", orig_img)
-cv.imshow("aug", aug_img)
-cv.imshow("aug_aug", aug_aug_img)
-cv.waitKey(0)
-cv.destroyAllWindows()
-"""

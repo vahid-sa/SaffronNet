@@ -40,7 +40,7 @@ class CSVDataset(Dataset):
         self.filenames = filenames_path
         self.class_list = class_list
         self.transform = torchvision.transforms.Compose([Normalizer(), Resizer()])
-        self.augment_transform = torchvision.transforms.Compose([Augmenter(), Normalizer(), Resizer()])
+        self.augment_transform = torchvision.transforms.Compose([Normalizer(), Augmenter(), Resizer()])
         self.augment = torchvision.transforms.Compose([Augmenter()])
         self.img_dir = images_dir
         self.ext = image_extension
