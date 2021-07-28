@@ -16,6 +16,7 @@ from utils.visutils import DrawMode, get_alpha, get_dots, std_draw_line, draw_li
 from prediction import imageloader
 
 NUM_VARIABLES = 3
+aug_detection_number = 0
 
 
 class Augmenter(object):
@@ -153,11 +154,19 @@ def detect(dataset, retinanet_model) -> dict:
 
 
 def augment_detector(data, retinanet_model):
+    global aug_detection_number
+    aug_detection_number += 1
     aug = Augmenter()
     augmented_data = {'img': data['aug_img'], 'name': data['name'], 'scale': data['scale']}
     det = detect_one_image(retinanet_model=retinanet_model, data=augmented_data)
     if len(det) > 0:
-        sample = aug(sample={'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)})
+        sample = {'img': augmented_data['img'].cpu().numpy(), 'annot': np.array(det)}
+        img = data["only_aug_img"][:, :, ::-1]
+        annot = sample['annot']
+        img = draw(img=img, boxes=annot, augmented=True)
+        save_path = osp.join(arguments.save_dir, "aug" + str(aug_detection_number) + arguments.ext)
+        cv.imwrite(save_path, img)
+        sample = aug(sample=sample)
         det = sample['annot'].tolist()
     return det
 
@@ -186,6 +195,9 @@ def draw(img, boxes, augmented=False):
 
 
 def main(args):
+    if osp.isdir(args.save_dir):
+        shutil.rmtree(args.save_dir)
+    os.makedirs(args.save_dir)
     loader = imageloader.CSVDataset(
         filenames_path="annotations/filenames.json",
         partition="supervised",
@@ -199,9 +211,6 @@ def main(args):
     detections = detect(dataset=loader, retinanet_model=loaded_model)
 
     print('writting images:')
-    if osp.isdir(args.save_dir):
-        shutil.rmtree(args.save_dir)
-    os.makedirs(args.save_dir)
     for index in range(len(loader)):
         data = loader[index]
         img_name = data['name']
