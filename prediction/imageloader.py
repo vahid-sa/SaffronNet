@@ -41,6 +41,7 @@ class CSVDataset(Dataset):
         self.class_list = class_list
         self.transform = torchvision.transforms.Compose([Normalizer(), Resizer()])
         self.augment_transform = torchvision.transforms.Compose([Augmenter(), Normalizer(), Resizer()])
+        self.augment = torchvision.transforms.Compose([Augmenter()])
         self.img_dir = images_dir
         self.ext = image_extension
         self.aug = Augmenter()
@@ -117,13 +118,15 @@ class CSVDataset(Dataset):
     def __getitem__(self, idx):
 
         img, img_name = self.load_image(idx)
-        augmented_img = img.copy()
+        floated_img = img.astype(np.float32) / 255.0
+        augmented_img = floated_img.copy()
 
-        orig_sample = self.transform({'img': img, 'name': img_name})
-
+        orig_sample = self.transform({'img': floated_img, 'name': img_name})
         aug_sample = self.augment_transform({'img': augmented_img, 'name': img_name})
+        only_aug_sample = self.augment({'img': img, 'name': img_name})
         sample = orig_sample
         sample["aug_img"] = aug_sample["img"]
+        sample["only_aug_img"] = only_aug_sample["img"]
 
         return sample
 
@@ -137,7 +140,7 @@ class CSVDataset(Dataset):
         else:
             img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
 
-        return img.astype(np.float32)/255.0, img_name
+        return img, img_name
 
     def name_to_label(self, name):
         return self.classes[name]

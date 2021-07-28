@@ -102,7 +102,7 @@ ENV/
 *.zip
 *.pt
 
-abs
+dataset/
 
 predict.py
 tests/test_augmentation.py
