@@ -13,7 +13,7 @@ def filter(predictions, scores, min_score=0.5):
 
 def nms(predictions, scores, min_score=0.5, max_distance=20):
     """ Apply nms over predictions
-        inputs: 
+        inputs:
             predictions: torch.Tensor (num_anchors, 3)
             scores: torch.Tensor (num_anchors)
             min_scores: int
@@ -36,6 +36,7 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
     del y
     gc.collect()
     dxy = t.sqrt(dx*dx + dy*dy)
+    co_dxy = t.sqrt(dx*dx + dy*dy)
     del dx, dy
     gc.collect()
     for i in range(dxy.shape[0]):
@@ -47,9 +48,17 @@ def nms(predictions, scores, min_score=0.5, max_distance=20):
         arg_max = t.argmax(candidate_scores)
         filter_row = t.cat([filter_row[:arg_max], filter_row[arg_max+1:]])
         dxy[:, filter_row] = -1
+        co_dxy[arg_max] = -1
     try:
         valid_indices = (dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+        valid_original_indices = original_indices[valid_indices]
     except IndexError:
-        return []
+        valid_original_indices = []
 
-    return original_indices[valid_indices]
+    try:
+        valid_indices = (co_dxy[0, :] > 0).nonzero(as_tuple=True)[0]
+        co_valid_original_indices = original_indices[valid_indices]
+    except IndexError:
+        co_valid_original_indices = []
+
+    return valid_original_indices, co_valid_original_indices

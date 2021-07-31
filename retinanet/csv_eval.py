@@ -64,11 +64,12 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
 
             # run network
             if torch.cuda.is_available():
-                scores, labels, boxes = retinanet(data['img'].permute(
+                results = retinanet(data['img'].permute(
                     2, 0, 1).cuda().float().unsqueeze(dim=0))
             else:
-                scores, labels, boxes = retinanet(
+                results = retinanet(
                     data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
+            scores, labels, boxes = results["main"]
             scores = scores.cpu().numpy()
             labels = labels.cpu().numpy()
             boxes = boxes.cpu().numpy()

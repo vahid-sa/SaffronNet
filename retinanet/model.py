@@ -23,6 +23,23 @@ model_urls = {
 }
 
 
+class Prediction:
+    def __init__(self):
+        self.__device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.finalScores = torch.Tensor([]).to(self.__device)
+        self.finalAnchorBoxesIndexes = torch.LongTensor([]).to(self.__device)
+        self.finalAnchorBoxesCoordinates = torch.Tensor([]).to(self.__device)
+
+    def __call__(self, anchors_nms_idx, iteration, anchorBoxes, scores):
+        if len(anchors_nms_idx) == 0:
+            return 0
+        self.finalScores = torch.cat((self.finalScores, scores[anchors_nms_idx]))
+        finalAnchorBoxesIndexesValue = torch.LongTensor([iteration] * anchors_nms_idx.shape[0]).to(self.__device)
+        self.finalAnchorBoxesIndexes = torch.cat((self.finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
+        self.finalAnchorBoxesCoordinates = torch.cat((self.finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+        return 0
+
+
 class PyramidFeatures(nn.Module):
     def __init__(self, C3_size, C4_size, C5_size, feature_size=256):
         super(PyramidFeatures, self).__init__()
@@ -315,7 +332,7 @@ class ResNet(nn.Module):
                 if torch.cuda.is_available():
                     anchors_nms_idx = anchors_nms_idx.cuda()
 
-                anchors_nms_idx = nms(
+                anchors_nms_idx, anchors_nms_ignored_idx = nms(
                     anchorBoxes,
                     scores,
                     min_score=0.5)
@@ -385,15 +402,8 @@ class VGGNet(nn.Module):
             transformed_anchors = self.clipBoxes(
                 transformed_anchors, img_batch)
 
-            finalResult = [[], [], []]
-
-            finalScores = torch.Tensor([])
-            finalAnchorBoxesIndexes = torch.Tensor([]).long()
-            finalAnchorBoxesCoordinates = torch.Tensor([])
-            if torch.cuda.is_available():
-                finalScores = finalScores.cuda()
-                finalAnchorBoxesIndexes = finalAnchorBoxesIndexes.cuda()
-                finalAnchorBoxesCoordinates = finalAnchorBoxesCoordinates.cuda()
+            pred = Prediction()
+            co_pred = Prediction()
 
             for i in range(classification.shape[2]):
                 scores = torch.squeeze(classification[:, :, i])
@@ -405,34 +415,26 @@ class VGGNet(nn.Module):
                 if count == 0:
                     continue
 
-                anchors_nms_idx = torch.Tensor([]).long()
-                if torch.cuda.is_available():
-                    anchors_nms_idx = anchors_nms_idx.cuda()
-
-                anchors_nms_idx = nms(
+                anchors_nms_idx, anchors_nms_ignored_idx = nms(
                     anchorBoxes,
                     scores,
                     min_score=0.5)
-                if len(anchors_nms_idx) == 0:
-                    continue
-                finalResult[0].extend(scores[anchors_nms_idx])
-                finalResult[1].extend(torch.tensor(
-                    [i] * anchors_nms_idx.shape[0]))
-                finalResult[2].extend(anchorBoxes[anchors_nms_idx])
 
-                finalScores = torch.cat(
-                    (finalScores, scores[anchors_nms_idx]))
-                finalAnchorBoxesIndexesValue = torch.tensor(
-                    [i] * anchors_nms_idx.shape[0])
-                if torch.cuda.is_available():
-                    finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
+                pred(anchors_nms_idx=anchors_nms_idx, iteration=i, anchorBoxes=anchorBoxes, scores=scores)
 
-                finalAnchorBoxesIndexes = torch.cat(
-                    (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
-                finalAnchorBoxesCoordinates = torch.cat(
-                    (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+            finalScores = pred.finalScores
+            finalAnchorBoxesIndexes = pred.finalAnchorBoxesIndexes
+            finalAnchorBoxesCoordinates = pred.finalAnchorBoxesCoordinates
 
-            return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
+            co_finalScores = co_pred.finalScores
+            co_finalAnchorBoxesIndexes = co_pred.finalAnchorBoxesIndexes
+            co_finalAnchorBoxesCoordinates = co_pred.finalAnchorBoxesCoordinates
+
+            final_results = {
+                "main": [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates],
+                "co": [co_finalScores, co_finalAnchorBoxesIndexes, co_finalAnchorBoxesCoordinates]
+            }
+            return final_results
 
 
 def vgg7(num_classes, pretrained=True, **kwargs):
