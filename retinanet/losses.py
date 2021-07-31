@@ -28,7 +28,7 @@ def absolute(tensor: torch.tensor, large_matrix: bool):
         tensor[row_index:, col_index:] = torch.abs(tensor[row_index:, col_index:])
     """
     # if large_matrix:
-    print("large matrix:", tensor.shape)
+    # print("large matrix:", tensor.shape)
     #    # for i in range(tensor.shape[0]):
     #    #     for j in range(tensor.shape[1]):
     #    #         tensor[i, j] = tensor[i, j] ** 2
