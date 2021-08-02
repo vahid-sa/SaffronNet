@@ -421,6 +421,7 @@ class VGGNet(nn.Module):
                     min_score=0.5)
 
                 pred(anchors_nms_idx=anchors_nms_idx, iteration=i, anchorBoxes=anchorBoxes, scores=scores)
+                co_pred(anchors_nms_idx=anchors_nms_ignored_idx, iteration=i, anchorBoxes=anchorBoxes, scores=scores)
 
             finalScores = pred.finalScores
             finalAnchorBoxesIndexes = pred.finalAnchorBoxesIndexes
