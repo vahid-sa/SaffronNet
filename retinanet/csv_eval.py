@@ -3,12 +3,11 @@ from retinanet.dataloader import CSVDataset
 import numpy as np
 import cv2 as cv
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 import torch
 from .settings import NUM_VARIABLES
 from retinanet.utils import compute_distance
 
-
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 def _compute_ap(recall, precision):
@@ -36,6 +35,70 @@ def _compute_ap(recall, precision):
     # and sum (\Delta recall) * prec
     ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
+
+
+def convert_results_to_detections(
+        results,
+        scale: float,
+) -> list:
+    scores, labels, boxes = results
+    scores = scores.cpu().numpy()
+    labels = labels.cpu().numpy()
+    boxes = boxes.cpu().numpy()
+    if boxes.shape[0] == 0:
+        return []
+    # correct boxes for image scale
+    boxes /= scale
+
+    # select detections
+    image_boxes = boxes
+    image_scores = scores
+    image_labels = labels
+    image_detections = np.concatenate([image_boxes, np.expand_dims(
+        image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
+    return image_detections
+
+
+def detect(dataset, retinanet_model):
+    """ Get the detections from the retinanet using the generator.
+    The result is a list of lists such that the size is:
+        all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
+    # Arguments
+        dataset         : The generator used to run images through the retinanet.
+        retinanet           : The retinanet to run on the images.
+    # Returns
+        A list of lists containing the detections for each image in the generator.
+    """
+    main_all_detections = [[None] * len(dataset.num_classes())] * len(dataset)
+    co_all_detections = [[None] * len(dataset.num_classes())] * len(dataset)
+
+    retinanet_model.eval()
+
+    print("detecting")
+    with torch.no_grad():
+
+        for index in range(len(dataset)):
+            data = dataset[index]
+            scale = data['scale']
+            img_name = float(int(data["name"]))
+
+            # run network
+            d = data['img'].permute(2, 0, 1)
+            d = d.to(device=device)
+            d = d.float()
+            d = d.unsqueeze(dim=0)
+            results = retinanet_model(d)
+            image_detections = convert_results_to_detections(results=results['main'], scale=scale)
+            main_all_detections.extend(image_detections)
+            image_detections = convert_results_to_detections(results=results['co'], scale=scale)
+            co_all_detections.extend(image_detections)
+            print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
+    print()
+    all_detections = {
+        "main": np.array(main_all_detections, dtype=np.float64),
+        "co": np.array(co_all_detections, dtype=np.float64),
+    }
+    return all_detections
 
 
 def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
