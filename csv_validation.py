@@ -12,7 +12,7 @@ def main(args=None):
     parser.add_argument('--model_path', help='Path to model', type=str)
     parser.add_argument('--images_path',help='Path to images directory',type=str)
     parser.add_argument('--class_list_path',help='Path to classlist csv',type=str)
-    parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=float, default=0.5)
+    parser.add_argument('--save_dir', type=str, help='where to save images.')
     parser = parser.parse_args(args)
 
     #dataset_val = CocoDataset(parser.coco_path, set_name='val2017',transform=transforms.Compose([Normalizer(), Resizer()]))
@@ -38,7 +38,7 @@ def main(args=None):
     retinanet.eval()
     # retinanet.module.freeze_bn()
 
-    print("Average precision:", csv_eval.evaluate(dataset_val, retinanet))
+    print("Average precision:", csv_eval.evaluate(dataset_val, retinanet, write_dir=parser.save_dir))
 
 
 if __name__ == '__main__':

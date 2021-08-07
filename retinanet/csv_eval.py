@@ -1,4 +1,5 @@
 from __future__ import print_function
+from os import path as osp
 from retinanet.dataloader import CSVDataset
 import numpy as np
 import cv2 as cv
@@ -6,8 +7,45 @@ import matplotlib.pyplot as plt
 import torch
 from .settings import NUM_VARIABLES
 from retinanet.utils import compute_distance
+from utils.visutils import draw_line
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+def draw_selected_ignored(loader, detections, output_dir, division=1):
+    nms_color_plate = {0: (0, 255, 255), 1: (0, 255, 0)}
+    print()
+    for i in range(len(loader)):
+        if i % division != 0:
+            continue
+        img_path = loader[i]["path"]
+        img = cv.imread(img_path)
+        main_detections = np.squeeze(detections['main'][i])
+        main_detections = np.concatenate([main_detections, np.ones(shape=(main_detections.shape[0], 1))], axis=1)
+        co_detections = np.squeeze(detections['co'][i])
+        co_detections = np.concatenate([co_detections, np.zeros(shape=(co_detections.shape[0], 1))], axis=1)
+        image_detections = np.concatenate([main_detections, co_detections])
+        image_detections = image_detections[image_detections[:, -1].argsort()]
+
+        for j in range(len(image_detections)):
+            det = image_detections[j]
+            x, y, alpha = det[:3]
+            status = det[-1]
+            line_color = nms_color_plate[status]
+            center_color = (0, 0, 0)
+            img = draw_line(
+                image=img,
+                p=(x, y),
+                alpha=90.0 - alpha,
+                line_color=line_color,
+                center_color=center_color,
+                half_line=True,
+                line_thickness=3)
+        filename = osp.basename(img_path)
+        save_path = osp.join(output_dir, filename)
+        cv.imwrite(save_path, img)
+        print("\rsaved {0}/{1}".format(i, len(loader)), end='')
+    print()
 
 
 def _compute_ap(recall, precision):
@@ -40,13 +78,18 @@ def _compute_ap(recall, precision):
 def convert_results_to_detections(
         results,
         scale: float,
+        num_classes,
 ) -> list:
+    detections = [None] * num_classes
     scores, labels, boxes = results
     scores = scores.cpu().numpy()
     labels = labels.cpu().numpy()
     boxes = boxes.cpu().numpy()
     if boxes.shape[0] == 0:
-        return []
+        # copy detections to all_detections
+        for label in range(num_classes):
+            detections[label] = np.zeros((0, NUM_VARIABLES + 1))
+        return detections
     # correct boxes for image scale
     boxes /= scale
 
@@ -56,52 +99,13 @@ def convert_results_to_detections(
     image_labels = labels
     image_detections = np.concatenate([image_boxes, np.expand_dims(
         image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
-    return image_detections
+    # copy detections to all_detections
+    for label in range(num_classes):
+        detections[label] = image_detections[image_detections[:, -1] == label, :-1]
+    return detections
 
 
-def detect(dataset, retinanet_model):
-    """ Get the detections from the retinanet using the generator.
-    The result is a list of lists such that the size is:
-        all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
-    # Arguments
-        dataset         : The generator used to run images through the retinanet.
-        retinanet           : The retinanet to run on the images.
-    # Returns
-        A list of lists containing the detections for each image in the generator.
-    """
-    main_all_detections = [[None] * len(dataset.num_classes())] * len(dataset)
-    co_all_detections = [[None] * len(dataset.num_classes())] * len(dataset)
-
-    retinanet_model.eval()
-
-    print("detecting")
-    with torch.no_grad():
-
-        for index in range(len(dataset)):
-            data = dataset[index]
-            scale = data['scale']
-            img_name = float(int(data["name"]))
-
-            # run network
-            d = data['img'].permute(2, 0, 1)
-            d = d.to(device=device)
-            d = d.float()
-            d = d.unsqueeze(dim=0)
-            results = retinanet_model(d)
-            image_detections = convert_results_to_detections(results=results['main'], scale=scale)
-            main_all_detections.extend(image_detections)
-            image_detections = convert_results_to_detections(results=results['co'], scale=scale)
-            co_all_detections.extend(image_detections)
-            print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
-    print()
-    all_detections = {
-        "main": np.array(main_all_detections, dtype=np.float64),
-        "co": np.array(co_all_detections, dtype=np.float64),
-    }
-    return all_detections
-
-
-def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
+def _get_detections(dataset, retinanet):
     """ Get the detections from the retinanet using the generator.
     The result is a list of lists such that the size is:
         all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
@@ -114,58 +118,32 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
     # Returns
         A list of lists containing the detections for each image in the generator.
     """
-    all_detections = [[None for i in range(
-        dataset.num_classes())] for j in range(len(dataset))]
+    main_all_detections = [None] * len(dataset)
+    co_all_detections = [None] * len(dataset)
 
     retinanet.eval()
-
+    print()
     with torch.no_grad():
-
         for index in range(len(dataset)):
             data = dataset[index]
             scale = data['scale']
 
             # run network
-            if torch.cuda.is_available():
-                results = retinanet(data['img'].permute(
-                    2, 0, 1).cuda().float().unsqueeze(dim=0))
-            else:
-                results = retinanet(
-                    data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
-            scores, labels, boxes = results["main"]
-            scores = scores.cpu().numpy()
-            labels = labels.cpu().numpy()
-            boxes = boxes.cpu().numpy()
-
-            # correct boxes for image scale
-            boxes /= scale
-
-            # select indices which have a score above the threshold
-            indices = np.where(scores > score_threshold)[0]
-            if indices.shape[0] > 0:
-                # select those scores
-                scores = scores[indices]
-
-                # find the order with which to sort the scores
-                scores_sort = np.argsort(-scores)[:max_detections]
-
-                # select detections
-                image_boxes = boxes[indices[scores_sort], :]
-                image_scores = scores[scores_sort]
-                image_labels = labels[indices[scores_sort]]
-                image_detections = np.concatenate([image_boxes, np.expand_dims(
-                    image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
-
-                # copy detections to all_detections
-                for label in range(dataset.num_classes()):
-                    all_detections[index][label] = image_detections[image_detections[:, -1] == label, :-1]
-            else:
-                # copy detections to all_detections
-                for label in range(dataset.num_classes()):
-                    all_detections[index][label] = np.zeros(
-                        (0, NUM_VARIABLES+1))
-
-            print('{}/{}'.format(index + 1, len(dataset)), end='\r')
+            data_in_pred_format = data['img'].permute(2, 0, 1).to(device).float().unsqueeze(dim=0)
+            results = retinanet(data_in_pred_format)
+            main_all_detections[index] = convert_results_to_detections(
+                results=results['main'],
+                scale=scale,
+                num_classes=dataset.num_classes(),
+            )
+            co_all_detections[index] = convert_results_to_detections(
+                results=results['co'],
+                scale=scale,
+                num_classes=dataset.num_classes(),
+            )
+            print('\r{}/{}'.format(index + 1, len(dataset)), end='')
+    print()
+    all_detections = {"main": main_all_detections, "co": co_all_detections}
 
     return all_detections
 
@@ -197,15 +175,12 @@ def _get_annotations(generator):
 
 
 def evaluate(
-    generator: CSVDataset,
-    retinanet,
-    XYd_threshold=10,
-    Ad_threshold=25,
-    score_threshold=0.05,
-    max_detections=1000,
-    save_path=None,
-    visualizer=None,
-    write_dir=None
+        generator: CSVDataset,
+        retinanet,
+        XYd_threshold=10,
+        Ad_threshold=25,
+        save_path=None,
+        write_dir=None
 ):
     """ Evaluate a given dataset using a given retinanet.
     # Arguments
@@ -222,8 +197,12 @@ def evaluate(
     # gather all detections and annotations
 
     all_detections = _get_detections(
-        generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
+        generator, retinanet)
+    main_detections = all_detections["main"]
+    co_detections = all_detections['co']
     all_annotations = _get_annotations(generator)
+    if write_dir is not None:
+        draw_selected_ignored(loader=generator, detections=all_detections, output_dir=write_dir)
 
     average_precisions = {}
 
@@ -234,7 +213,7 @@ def evaluate(
         num_annotations = 0.0
 
         for i in range(len(generator)):
-            detections = all_detections[i][label]
+            detections = main_detections[i][label]
             annotations = all_annotations[i][label]
             num_annotations += annotations.shape[0]
             detected_annotations = []
@@ -265,13 +244,6 @@ def evaluate(
                     true_positives = np.append(true_positives, 0)
                     dec_pred.append(d)
 
-            if visualizer is not None:
-                img = generator.load_image(i)
-                img = (img * 255).astype(np.float32)
-                img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-                visualizer(image=img, image_name=i, accepted_predictions=acc_pred,
-                           declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir)
-
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
             average_precisions[label] = 0, 0
@@ -289,8 +261,8 @@ def evaluate(
         # compute recall and precision
         recall = true_positives / num_annotations
         precision = true_positives / \
-            np.maximum(true_positives + false_positives,
-                       np.finfo(np.float64).eps)
+                    np.maximum(true_positives + false_positives,
+                               np.finfo(np.float64).eps)
 
         # compute average precision
         average_precision = _compute_ap(recall, precision)
@@ -313,7 +285,7 @@ def evaluate(
             plt.title('Precision Recall curve')
 
             # function to show the plot
-            plt.savefig(save_path+'/'+label_name+'_precision_recall.jpg')
+            plt.savefig(save_path + '/' + label_name + '_precision_recall.jpg')
 
     return average_precisions
     # return 0.5

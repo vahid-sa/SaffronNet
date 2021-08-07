@@ -227,10 +227,11 @@ class CSVDataset(Dataset):
 
         img = self.load_image(idx)
         annot = self.load_annotations(idx)
+        path = self.image_names[idx]
         sample = {'img': img, 'annot': annot}
         if self.transform:
             sample = self.transform(sample)
-
+        sample["path"] = path
         return sample
 
     def load_image(self, image_index):
