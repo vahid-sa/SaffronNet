@@ -180,7 +180,8 @@ def evaluate(
         XYd_threshold=10,
         Ad_threshold=25,
         save_path=None,
-        write_dir=None
+        write_dir=None,
+        division=1,
 ):
     """ Evaluate a given dataset using a given retinanet.
     # Arguments
@@ -199,10 +200,9 @@ def evaluate(
     all_detections = _get_detections(
         generator, retinanet)
     main_detections = all_detections["main"]
-    co_detections = all_detections['co']
     all_annotations = _get_annotations(generator)
     if write_dir is not None:
-        draw_selected_ignored(loader=generator, detections=all_detections, output_dir=write_dir)
+        draw_selected_ignored(loader=generator, detections=all_detections, output_dir=write_dir, division=division)
 
     average_precisions = {}
 
