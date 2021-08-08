@@ -120,11 +120,12 @@ class Training:
 
                 # run network
                 if torch.cuda.is_available():
-                    scores, labels, boxes = retinanet_model(data['img'].permute(
+                    results = retinanet_model(data['img'].permute(
                         2, 0, 1).cuda().float().unsqueeze(dim=0))
                 else:
-                    scores, labels, boxes = retinanet_model(
+                    results = retinanet_model(
                         data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
+                scores, labels, boxes = results["main"]
                 scores = scores.cpu().numpy()
                 labels = labels.cpu().numpy()
                 boxes = boxes.cpu().numpy()
@@ -341,8 +342,9 @@ class Training:
                 #     mAP=-1,
                 #     epoch=epoch_num,
                 # )
-
-            mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
+            write_dir = osp.join(self.args.image_save_dir, f"cycle_{str(self.cycle_number)}", f"epoch_str{epoch_num}")
+            os.makedirs(write_dir, exist_ok=True)
+            mAP = csv_eval.evaluate(self.dataset_val, retinanet_model, write_dir=write_dir, division=10)
             if mAP[0][0] > max_mAp:
                 print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
                 max_mAp = mAP[0][0]
