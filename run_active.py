@@ -31,7 +31,7 @@ class Training:
         if not osp.isdir("./active_annotations/"):
             os.mkdir("./active_annotations/")
         self.supervised_file = "./annotations/supervised.csv"
-        self.unsupervised_file = "./annotations/unsupervised.csv"
+        self.unsupervised_file = "./annotations/supervised.csv"
         self.validation_file = "annotations/validation.csv"
         self.class_list_file = "annotations/labels.csv"
         self.corrected_annotations_file = "active_annotations/corrected.csv"
@@ -43,7 +43,7 @@ class Training:
 
         self.loader = imageloader.CSVDataset(
             filenames_path="annotations/filenames.json",
-            partition="unsupervised",
+            partition="supervised",
             class_list=self.class_list_file,
             images_dir=args.image_dir,
             image_extension=args.ext,
@@ -290,7 +290,6 @@ class Training:
                     classification_loss = classification_loss.mean()
                     xydistance_regression_loss = xydistance_regression_loss.mean()
                     angle_distance_regression_losses = angle_distance_regression_losses.mean()
-
                     loss = classification_loss + xydistance_regression_loss + \
                            angle_distance_regression_losses
 
