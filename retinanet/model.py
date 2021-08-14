@@ -397,7 +397,7 @@ class VGGNet(nn.Module):
 
         if self.training:
             return self.focalLoss(
-                classificationw=classification,
+                classifications=classification,
                 regressions=regression,
                 anchors=anchors,
                 annotations=annotations,
