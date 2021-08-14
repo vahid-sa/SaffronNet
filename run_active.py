@@ -263,7 +263,7 @@ class Training:
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
-            retinanet.settings.save_image_dir = osp.join(args.save_image_dir, f"cycle_{self.cycle_number}", f"epoch_{epoch_num}")
+            retinanet.settings.save_image_dir = osp.join(self.args.image_save_dir, f"cycle_{self.cycle_number}", f"epoch_{epoch_num}")
             os.makedirs(retinanet.settings.save_image_dir, exist_ok=True)
             gc.collect()
             torch.cuda.empty_cache()

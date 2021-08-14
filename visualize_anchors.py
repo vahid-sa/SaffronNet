@@ -1,14 +1,14 @@
-from retinanet.dataloader import CSVDataset, Resizer, Normalizer
-from retinanet.losses import calc_distance
-from retinanet.anchors import Anchors
+# from retinanet.dataloader import CSVDataset, Resizer, Normalizer
+# from retinanet.losses import calc_distance
+# from retinanet.anchors import Anchors
 from utils.visutils import draw_line
-from torchvision import transforms
-import numpy as np
-import os
+# from torchvision import transforms
+# import numpy as np
+# import os
 from os import path as osp
-import argparse
+# import argparse
 import torch
-from retinanet.settings import *
+# from retinanet.settings import *
 import cv2
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -49,7 +49,7 @@ def visualize_anchors(anchors, annots, load_image_path, save_image_dir, targets)
     save_image_path = osp.join(save_image_dir, osp.basename(load_image_path))
     cv2.imwrite(save_image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
-
+"""
 def main(args=None):
     parser = argparse.ArgumentParser(
         description='Simple training script for training a RetinaNet network.')
@@ -179,3 +179,4 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
+"""
