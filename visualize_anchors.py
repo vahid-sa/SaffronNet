@@ -1,29 +1,53 @@
-from retinanet.dataloader import CocoDataset, CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, \
-    UnNormalizer, Normalizer
+from retinanet.dataloader import CSVDataset, Resizer, Normalizer
 from retinanet.losses import calc_distance
 from retinanet.anchors import Anchors
-from utils.visutils import write_angle, draw_line
-import matplotlib.pyplot as plt
-from torchvision import datasets, models, transforms
-from torch.utils.data import Dataset, DataLoader
-import torch
+from utils.visutils import draw_line
+from torchvision import transforms
 import numpy as np
-import torchvision
-import time
 import os
-import copy
-import pdb
-import time
+from os import path as osp
 import argparse
+import torch
 from retinanet.settings import *
-import skimage
-import sys
-import cv2 as cv
+import cv2
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-assert torch.__version__.split_uncertain_and_noisy('.')[0] == '1'
+def visualize_anchors(anchors, annots, load_image_path, save_image_dir, targets):
+    image = cv2.cvtColor(cv2.imread(load_image_path), cv2.COLOR_BGR2RGB)
+    _anchors = anchors[0, :, :]
+    for anchor in _anchors[targets.squeeze() == 1]:
+        x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
+        image = draw_line(
+            image, (x, y), alpha,
+            line_color=(0, 255, 0),
+            center_color=(0, 0, 255),
+            half_line=True,
+            distance_thresh=40,
+            line_thickness=2
+        )
+    for anot in annots:
+        x, y, alpha = anot[0], anot[1], 90 - anot[2]
+        image = draw_line(
+            image, (x, y), alpha,
+            line_color=(0, 0, 0),
+            center_color=(255, 0, 0),
+            half_line=True
+        )
+    for anchor in _anchors[targets.squeeze() == -1]:
+        x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
+        image = draw_line(
+            image, (x, y), alpha,
+            line_color=(255, 255, 0),
+            center_color=(0, 0, 255),
+            half_line=True,
+            distance_thresh=40,
+            line_thickness=2
 
-print('CUDA available: {}'.format(torch.cuda.is_available()))
+        )
+    save_image_path = osp.join(save_image_dir, osp.basename(load_image_path))
+    cv2.imwrite(save_image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
 
 def main(args=None):
@@ -149,8 +173,8 @@ def main(args=None):
 
             )
         image_name = os.path.basename(dataset.image_names[i])
-        cv.imwrite(os.path.join(parser.save_dir, image_name),
-                   cv.cvtColor(image.astype(np.uint8), cv.COLOR_RGB2BGR))
+        cv2.imwrite(os.path.join(parser.save_dir, image_name),
+                    cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_RGB2BGR))
 
 
 if __name__ == '__main__':

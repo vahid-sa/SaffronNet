@@ -263,6 +263,8 @@ class Training:
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
+            retinanet.settings.save_image_dir = osp.join(args.save_image_dir, f"cycle_{self.cycle_number}", f"epoch_{epoch_num}")
+            os.makedirs(retinanet.settings.save_image_dir, exist_ok=True)
             gc.collect()
             torch.cuda.empty_cache()
             retinanet_model.train()
@@ -281,10 +283,10 @@ class Training:
                     optimizer.zero_grad()
                     if torch.cuda.is_available():
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
-                            [data['img'].cuda().float(), data['annot']])
+                            [data['img'].cuda().float(), data['annot'], data["path"]])
                     else:
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
-                            [data['img'].float(), data['annot']])
+                            [data['img'].float(), data['annot'], data["path"]])
                     classification_loss = classification_loss.mean()
                     xydistance_regression_loss = xydistance_regression_loss.mean()
                     angle_distance_regression_losses = angle_distance_regression_losses.mean()
@@ -341,7 +343,7 @@ class Training:
                 #     mAP=-1,
                 #     epoch=epoch_num,
                 # )
-            write_dir = osp.join(self.args.image_save_dir, f"cycle_{str(self.cycle_number)}", f"epoch_str{epoch_num}")
+            write_dir = retinanet.settings.save_image_dir
             os.makedirs(write_dir, exist_ok=True)
             mAP = csv_eval.evaluate(self.dataset_val, retinanet_model, write_dir=write_dir, division=10)
             if mAP[0][0] > max_mAp:
@@ -383,6 +385,7 @@ class Training:
             else:
                 model_path = self.model_path_pattern.format(i - 1)
                 state_dict_path = self.state_dict_path_pattern.format(i - 1)
+
 
             fileModelIO = open(model_path, "rb")
             fileStateDictIO = open(state_dict_path, "rb")

@@ -385,7 +385,7 @@ class VGGNet(nn.Module):
 
     def forward(self, inputs):
         if self.training:
-            img_batch, annotations = inputs
+            img_batch, annotations, img_load_paths = inputs
         else:
             img_batch = inputs
 
@@ -396,7 +396,13 @@ class VGGNet(nn.Module):
         anchors = self.anchors(img_batch)
 
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations)
+            return self.focalLoss(
+                classificationw=classification,
+                regressions=regression,
+                anchors=anchors,
+                annotations=annotations,
+                load_image_paths=img_load_paths,
+            )
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(

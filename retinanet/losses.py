@@ -1,9 +1,9 @@
-import numpy as np
 import torch
 import torch.nn as nn
 import gc
-from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
+from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, save_image_dir
 import retinanet
+from visualize_anchors import visualize_anchors
 
 
 def absolute(tensor: torch.tensor, large_matrix: bool):
@@ -102,7 +102,7 @@ def calc_distance(a, b):
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations):
+    def forward(self, classifications, regressions, anchors, annotations, load_image_paths):
         print(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
         alpha = 0.95
         gamma = 2.0
@@ -236,7 +236,14 @@ class FocalLoss(nn.Module):
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
-
+            if save_image_dir is not None:
+                visualize_anchors(
+                    anchors=anchors,
+                    targets=targets,
+                    annots=center_alpha_annotation,
+                    save_image_dir=save_image_dir,
+                    load_image_path=load_image_paths[j],
+                )
             # compute the loss for regression
 
             if positive_indices.sum() > 0:
