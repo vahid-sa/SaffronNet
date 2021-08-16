@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import gc
-from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE, save_image_dir
+from retinanet.settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
 from visualize_anchors import visualize_anchors
 
@@ -236,12 +236,12 @@ class FocalLoss(nn.Module):
 
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
-            if save_image_dir is not None:
+            if retinanet.settings.save_image_dir is not None:
                 visualize_anchors(
                     anchors=anchors,
                     targets=targets,
                     annots=center_alpha_annotation,
-                    save_image_dir=save_image_dir,
+                    save_image_dir=retinanet.settings.save_image_dir,
                     load_image_path=load_image_paths[j],
                 )
             # compute the loss for regression
