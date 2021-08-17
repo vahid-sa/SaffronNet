@@ -179,7 +179,8 @@ class Training:
                              dtype=noisy_boxes.dtype)
         corrected_boxes = np.concatenate([corrected_boxes[:, [NAME, X, Y, ALPHA, LABEL]], corrected_mode], axis=1)
         noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA, LABEL]], noisy_mode], axis=1)
-        active_boxes = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
+        # active_boxes = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
+        active_boxes = corrected_boxes
         active_boxes = active_boxes[active_boxes[:, NAME].argsort()]
         save_images_dir = osp.join(self.args.image_save_dir, "cycle_" + str(self.cycle_number))
         if osp.isdir(save_images_dir):
@@ -200,7 +201,7 @@ class Training:
         dataset_train = CSVDataset(
             train_file=self.train_file,
             class_list=self.class_list_file,
-            transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]),
+            transform=transforms.Compose([Normalizer(), Resizer()]),
             images_dir=self.args.image_dir,
             image_extension=self.args.ext,
         )
@@ -263,7 +264,9 @@ class Training:
         del init_mAP
 
         for epoch_num in range(self.args.epochs):
+            print("save_image_dir1:", retinanet.settings.save_image_dir)
             retinanet.settings.save_image_dir = osp.join(self.args.image_save_dir, f"cycle_{self.cycle_number}", f"epoch_{epoch_num}")
+            print("save_image_dir2:", retinanet.settings.save_image_dir)
             os.makedirs(retinanet.settings.save_image_dir, exist_ok=True)
             gc.collect()
             torch.cuda.empty_cache()
@@ -342,7 +345,7 @@ class Training:
                 #     mAP=-1,
                 #     epoch=epoch_num,
                 # )
-            write_dir = retinanet.settings.save_image_dir
+            write_dir = osp.join(retinanet.settings.save_image_dir, "evaluation")
             os.makedirs(write_dir, exist_ok=True)
             mAP = csv_eval.evaluate(self.dataset_val, retinanet_model, write_dir=write_dir, division=10)
             if mAP[0][0] > max_mAp:

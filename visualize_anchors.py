@@ -3,7 +3,7 @@
 # from retinanet.anchors import Anchors
 from utils.visutils import draw_line
 # from torchvision import transforms
-# import numpy as np
+import numpy as np
 # import os
 from os import path as osp
 # import argparse
@@ -14,9 +14,21 @@ import cv2
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
+def resize_image(image):
+    rows, cols, cns = image.shape
+    pad_w = 32 - rows % 32
+    pad_h = 32 - cols % 32
+
+    new_image = np.zeros(
+        (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
+    new_image[:rows, :cols, :] = image.astype(np.float32)
+    return new_image
+
+
 def visualize_anchors(anchors, annots, load_image_path, save_image_dir, targets):
-    image = cv2.cvtColor(cv2.imread(load_image_path), cv2.COLOR_BGR2RGB)
+    image = resize_image(cv2.cvtColor(cv2.imread(load_image_path), cv2.COLOR_BGR2RGB))
     _anchors = anchors[0, :, :]
+    """
     for anchor in _anchors[targets.squeeze() == 1]:
         x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
         image = draw_line(
@@ -27,14 +39,17 @@ def visualize_anchors(anchors, annots, load_image_path, save_image_dir, targets)
             distance_thresh=40,
             line_thickness=2
         )
+    """
     for anot in annots:
-        x, y, alpha = anot[0], anot[1], 90 - anot[2]
+        # x, y, alpha = anot[0], anot[1], 90 - anot[2]
+        x, y, alpha = anot[0], anot[1], anot[2]
         image = draw_line(
             image, (x, y), alpha,
             line_color=(0, 0, 0),
             center_color=(255, 0, 0),
             half_line=True
         )
+    """
     for anchor in _anchors[targets.squeeze() == -1]:
         x, y, alpha = anchor[0], anchor[1], 90 - anchor[2]
         image = draw_line(
@@ -46,6 +61,7 @@ def visualize_anchors(anchors, annots, load_image_path, save_image_dir, targets)
             line_thickness=2
 
         )
+    """
     save_image_path = osp.join(save_image_dir, osp.basename(load_image_path))
     cv2.imwrite(save_image_path, cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
