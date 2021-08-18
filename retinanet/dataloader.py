@@ -275,7 +275,8 @@ class CSVDataset(Dataset):
             # some annotations have basically no width / height, skip them
             ctr_x = a['x']
             ctr_y = a['y']
-            alpha = normalize_alpha(90 - a['alpha'])
+            # alpha = normalize_alpha(90 - a['alpha'])
+            alpha = normalize_alpha(a['alpha'])
             ground_truth_status = a["ground_truth"]
 
             # if (x2-x1) < 1 or (y2-y1) < 1:
