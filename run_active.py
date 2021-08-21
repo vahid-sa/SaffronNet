@@ -286,7 +286,8 @@ class Training:
                     optimizer.zero_grad()
                     if torch.cuda.is_available():
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
-                            [data['img'].cuda().float(), data['annot'], data["path"]])
+                            [data['img'].cuda().float(), data[
+                                'annot'], data["path"]])
                     else:
                         classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
                             [data['img'].float(), data['annot'], data["path"]])
@@ -398,6 +399,7 @@ class Training:
 
             gc.collect()
             torch.cuda.empty_cache()
+            """
             corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
                 trained_model=loaded_model,
             )
@@ -413,6 +415,11 @@ class Training:
                 path=self.corrected_annotations_file,
                 class_dict=self.index_to_class,
             )
+            """
+            with open(self.unsupervised_file, "r") as f:
+                file = f.read()
+            with open(self.train_file, "w") as f:
+                f.write(file)
 
             gc.collect()
             torch.cuda.empty_cache()
