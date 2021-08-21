@@ -104,3 +104,5 @@ ENV/
 
 
 predict.py
+tests/test.py
+dataset/
