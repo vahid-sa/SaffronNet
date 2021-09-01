@@ -30,7 +30,7 @@ class Training:
     def __init__(self, args):
         if not osp.isdir("./active_annotations/"):
             os.mkdir("./active_annotations/")
-        self.supervised_file = "./annotations/supervised.csv"
+        self.supervised_file = "./annotations/unsupervised.csv"
         self.unsupervised_file = "./annotations/supervised.csv"
         self.validation_file = "annotations/validation.csv"
         self.class_list_file = "annotations/labels.csv"
@@ -43,7 +43,7 @@ class Training:
 
         self.loader = imageloader.CSVDataset(
             filenames_path="annotations/filenames.json",
-            partition="supervised",
+            partition="unsupervised",
             class_list=self.class_list_file,
             images_dir=args.image_dir,
             image_extension=args.ext,
@@ -250,8 +250,8 @@ class Training:
             optimizer, patience=3, verbose=True)
         # checkpoint = torch.load(previous_state_dict_path)
         retinanet_model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
         retinanet_model.train()
         if self.args.model_type == "resnet":

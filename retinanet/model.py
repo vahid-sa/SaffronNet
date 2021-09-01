@@ -401,7 +401,7 @@ class VGGNet(nn.Module):
                 regressions=regression,
                 anchors=anchors,
                 annotations=annotations,
-                load_image_paths=img_load_paths,
+                # load_image_paths=img_load_paths,
             )
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
