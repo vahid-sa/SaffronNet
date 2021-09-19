@@ -4,8 +4,12 @@ import cv2
 import torchvision
 import csv
 from os import path as osp
-from retinanet.dataloader import CSVDataset, Normalizer, Resizer
+import torch
+from prediction import imageloader
+from prediction.predict_boxes import select_uncertain_indices
 from retinanet.utils import load_classes
+from utils.prediction import detect
+import retinanet
 
 
 def pad_image(image):
@@ -22,11 +26,17 @@ def pad_image(image):
 
 class Mask:
     def __init__(self, image):
-        self.canvas = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint8)
+        # self.canvas = np.zeros(shape=(image.shape[0], image.shape[1]), dtype=np.uint8)
+        self.image = image.astype(np.float64)
 
-    def __call__(self, index, color):
+    # def __call__(self, index, color):
+    #     left, top, right, bottom = index
+    #     self.canvas[top:bottom, left:right] = color
+
+    def __call__(self, index, status):
         left, top, right, bottom = index
-        self.canvas[top:bottom, left:right] = color
+        if status:
+            self.image[top:bottom, left:right] *= 0.5
 
 
 def tile(image, size):
@@ -156,7 +166,7 @@ csv_classes = osp.abspath("annotations/labels.csv")
 csv_anots = osp.abspath("annotations/test.csv")
 dataset = Dataset(csv_annotations_path=csv_anots, labels_path=csv_classes, images_dir=images_dir)
 dataset.column_wise = False
-
+"""
 data = dataset[5]
 img, annots = data['img'], data['annots']
 canvas = np.zeros(shape=img.shape[:2], dtype=np.float64)
@@ -172,13 +182,57 @@ cv2.imshow("canvas", mask.canvas)
 cv2.imshow("image", img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+"""
+
+loader = imageloader.CSVDataset(
+    filenames_path="annotations/filenames.json",
+    partition="unsupervised",
+    class_list=csv_classes,
+    images_dir=images_dir,
+    image_extension=".jpg",
+    transform=torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
+)
+
+model = torch.load('./model.pt')
+retinanet.settings.NUM_QUERIES = 6000
+detections = detect(dataset=loader, retinanet_model=model)
+uncertain_indices = select_uncertain_indices(boxes=detections)
+print("uncertain_indices", len(uncertain_indices))
+
+failiures = 0
+img_pattern = cv2.imread(osp.join(loader.img_dir, loader.image_names[0] + loader.ext))
+indices = tile(image=img_pattern, size=100)
+states = np.full(shape=(len(loader.image_names), len(indices)), fill_value=False, dtype=np.bool)
+for uncertain_index in detections[uncertain_indices]:
+    position = loader.image_names.index(f"{int(uncertain_index[0]):03d}")
+    x, y = uncertain_index[[1, 2]]
+    state = list(
+        np.logical_and(
+            np.logical_and(
+                np.logical_and(indices[:, 0] <= x, indices[:, 1] <= y), indices[:, 2] >= x), indices[:, 3] >= y)
+    )
+    if True in state:
+        states[position, state.index(True)] = True
+    else:
+        failiures += 1
+
+detections_uncertain_indices = detections[uncertain_indices]
+for i, img_states in enumerate(states):
+    if not (True in img_states):
+        continue
+    img = cv2.imread(osp.join(loader.img_dir, loader.image_names[i] + loader.ext))
+    mask = Mask(image=img)
+    tuple(mask(index, state) for index, state in zip(indices, img_states))
+    img = mask.image.astype(np.uint8)
+    direc = '/tmp/saffron_imgs'
+    os.makedirs(direc, exist_ok=True)
+    image_uncertain_indices = detections_uncertain_indices[detections_uncertain_indices[:, 0] == int(loader.image_names[i])]
+    for index in image_uncertain_indices:
+        x, y = index[[1, 2]]
+        score = index[4]
+        cv2.circle(img, (int(x), int(y)), 3, (0, 0, 255), -1)
+        cv2.putText(img, f"{round(score, 2)}", (int(x + 2), int(y + 2)),  cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
+    cv2.imwrite(osp.join(direc, loader.image_names[i] + loader.ext), img)
 
 
-# dataset = CSVDataset(
-#     train_file=csv_anots,
-#     class_list=csv_classes,
-#     images_dir=images_dir,
-#     transform=torchvision.transforms.Compose([Normalizer(), Resizer()]),
-# )
-
-
+# print("failiures", failiures)
