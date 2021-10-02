@@ -1,14 +1,16 @@
 import os
 import numpy as np
-import cv2
+from cv2 import cv2
 import torchvision
 import csv
 from os import path as osp
 import torch
+import shutil
 from prediction import imageloader
-from prediction.predict_boxes import select_uncertain_indices
+from prediction.predict_boxes import split_uncertain_and_noisy
 from retinanet.utils import load_classes
 from utils.prediction import detect
+from utils.visutils import draw_line
 import retinanet
 
 
@@ -37,21 +39,6 @@ class Mask:
         left, top, right, bottom = index
         if status:
             self.image[top:bottom, left:right] *= 0.5
-
-
-def tile(image, size):
-    top, left = np.mgrid[0:image.shape[0]:size, 0:image.shape[1]:size]
-    right = left + size - 1
-    bottom = top + size - 1
-    right[:, -1] = image.shape[1] - 1
-    bottom[:, -1] = image.shape[0] - 1
-    left = np.expand_dims(left, axis=2)
-    top = np.expand_dims(top, axis=2)
-    right = np.expand_dims(right, axis=2)
-    bottom = np.expand_dims(bottom, axis=2)
-    indices = np.concatenate([left, top, right, bottom], axis=-1)
-    indices = indices.reshape((-1, indices.shape[-1]))
-    return indices
 
 
 class Dataset:
@@ -146,45 +133,113 @@ class Dataset:
     row_wise = property(is_row_wise, set_row_wise)
 
 
+class UncertaintyStatus:
+    def __init__(self, loader, model, class_list_file_path, corrected_annotations_file_path, tiling_size=100):
+        self.NAME, self.X, self.Y, self.ALPHA, self.LABEL, self.TRUTH, self.SCORE = 0, 1, 2, 3, 4, 5, 5
+        self.loader = loader
+        self.model = model
+        self.class_to_index, self.index_to_class = load_classes(csv_class_list_path=class_list_file_path)
+        self.corrected_annotations_file_path = corrected_annotations_file_path
+        self.img_pattern = cv2.imread(osp.join(self.loader.img_dir, self.loader.image_names[0] + self.loader.ext))
+        self.tiling_indices = UncertaintyStatus._tile(image=self.img_pattern, size=tiling_size)
+        self.tiling_states = np.full(
+            shape=(len(self.loader.image_names), len(self.tiling_indices)),
+            fill_value=False,
+            dtype=np.bool,
+        )
+
+    def _load_annotations(self, path: str) -> np.array:
+        assert osp.isfile(path), "File does not exist."
+        boxes = list()
+        fileIO = open(path, "r")
+        reader = csv.reader(fileIO, delimiter=",")
+        for row in reader:
+            if row[self.X] == row[self.Y] == row[self.ALPHA] == row[self.LABEL] == "":
+                continue
+            box = [None, None, None, None, None]
+            box[self.NAME] = float(row[self.NAME])
+            box[self.X] = float(row[self.X])
+            box[self.Y] = float(row[self.Y])
+            box[self.ALPHA] = float(row[self.ALPHA])
+            box[self.LABEL] = float(self.class_to_index[row[self.LABEL]])
+            boxes.append(box)
+        fileIO.close()
+        boxes = np.asarray(boxes, dtype=np.float64)
+        return np.asarray(boxes[:, [self.NAME, self.X, self.Y, self.ALPHA, self.LABEL]], dtype=np.float64)
+
+    def _get_previous_corrected_annotation_names(self):
+        if osp.isfile(self.corrected_annotations_file_path):
+            previous_corrected_annotations = self._load_annotations(path=self.corrected_annotations_file_path)
+            previous_corrected_names = previous_corrected_annotations[:, self.NAME]
+        else:
+            previous_corrected_names = np.array(list(), dtype=np.float64)
+        return previous_corrected_names
+
+    @staticmethod
+    def _tile(image, size):
+        top, left = np.mgrid[0:image.shape[0]:size, 0:image.shape[1]:size]
+        right = left + size - 1
+        bottom = top + size - 1
+        right[:, -1] = image.shape[1] - 1
+        bottom[:, -1] = image.shape[0] - 1
+        left = np.expand_dims(left, axis=2)
+        top = np.expand_dims(top, axis=2)
+        right = np.expand_dims(right, axis=2)
+        bottom = np.expand_dims(bottom, axis=2)
+        indices = np.concatenate([left, top, right, bottom], axis=-1)
+        indices = indices.reshape((-1, indices.shape[-1]))
+        return indices
+
+    def get_active_predictions(self):
+        detections = detect(dataset=self.loader, retinanet_model=self.model)
+        previous_corrected_names = self._get_previous_corrected_annotation_names()
+        print(f"detections: {detections.shape} {detections.dtype}\nprevious {len(previous_corrected_names)}")
+        uncertain_boxes, noisy_boxes = split_uncertain_and_noisy(
+            boxes=detections,
+            previous_corrected_boxes_names=previous_corrected_names,
+        )
+        boxes = {"uncertain": uncertain_boxes, "noisy": noisy_boxes}
+        return boxes
+
+    def load_uncertainty_states(self, boxes):
+        uncertain_boxes, noisy_boxes = boxes["uncertain"], boxes["noisy"]
+        self.tiling_states[:, :] = False
+        for uncertain_box in uncertain_boxes:
+            position = self.loader.image_names.index(f"{int(uncertain_box[self.NAME]):03d}")
+            x, y = uncertain_box[[self.X, self.Y]]
+            state = list(
+                np.logical_and(
+                    np.logical_and(
+                        np.logical_and(self.tiling_indices[:, 0] <= x, self.tiling_indices[:, 1] <= y),
+                        self.tiling_indices[:, 2] >= x),
+                    self.tiling_indices[:, 3] >= y,
+                )
+            )
+            # Remove noisy boxes in uncertain states
+            if True in state:
+                self.tiling_states[position, state.index(True)] = True
+        return self.tiling_states
+
+    def get_mask(self, index):
+        img = cv2.imread(osp.join(self.loader.img_dir, self.loader.image_names[index] + self.loader.ext))
+        mask = np.full(shape=img.shape, fill_value=False, dtype=np.bool)
+        img_states = self.tiling_states[index]
+        if True in img_states:
+            for index, state in zip(self.tiling_indices, img_states):
+                left, top, right, bottom = index
+                if state:
+                    mask[top:bottom, left:right] = True
+        return mask
 
 
-
-"""
-img = cv2.imread("/home/spx/Documents/saffron_dataset/Train/001.jpg")
-img = pad_image(img)
-indices = tile(image=img, size=100)
-colors = np.random.randint(low=0, high=256, size=len(indices), dtype=np.uint8)
-mask = Mask(image=img)
-tuple(mask(index, color) for index, color in zip(indices, colors))
-cv2.imshow("canvas", mask.canvas)
-cv2.imshow("image", img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-"""
-images_dir = osp.expanduser("~/Documents/saffron_dataset/Train")
+images_dir = osp.expanduser("~/Saffron/dataset/Train")
 csv_classes = osp.abspath("annotations/labels.csv")
 csv_anots = osp.abspath("annotations/test.csv")
 dataset = Dataset(csv_annotations_path=csv_anots, labels_path=csv_classes, images_dir=images_dir)
 dataset.column_wise = False
-"""
-data = dataset[5]
-img, annots = data['img'], data['annots']
-canvas = np.zeros(shape=img.shape[:2], dtype=np.float64)
-indices = tile(image=img, size=100)
-status = np.zeros(shape=len(indices), dtype=np.uint8)
-for annot in annots:
-    if annot['is_asked']:
-        state = list(np.logical_and(np.logical_and(np.logical_and(indices[:, 0] <= annot['x'], indices[:, 1] <= annot['y']), indices[:, 2] >= annot['x']), indices[:, 3] >= annot['y']))
-        status[state.index(True)] = 255
-mask = Mask(image=img)
-tuple(mask(index, state) for index, state in zip(indices, status))
-cv2.imshow("canvas", mask.canvas)
-cv2.imshow("image", img)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-"""
 
-loader = imageloader.CSVDataset(
+
+data_loader = imageloader.CSVDataset(
     filenames_path="annotations/filenames.json",
     partition="unsupervised",
     class_list=csv_classes,
@@ -193,46 +248,53 @@ loader = imageloader.CSVDataset(
     transform=torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
 )
 
-model = torch.load('./model.pt')
-retinanet.settings.NUM_QUERIES = 6000
-detections = detect(dataset=loader, retinanet_model=model)
-uncertain_indices = select_uncertain_indices(boxes=detections)
-print("uncertain_indices", len(uncertain_indices))
+retinanet_model = torch.load(osp.expanduser('~/Saffron/weights/supervised/init_model.pt'))
+retinanet.settings.NUM_QUERIES = 100
+retinanet.settings.NOISY_THRESH = 0.15
 
-failiures = 0
-img_pattern = cv2.imread(osp.join(loader.img_dir, loader.image_names[0] + loader.ext))
-indices = tile(image=img_pattern, size=100)
-states = np.full(shape=(len(loader.image_names), len(indices)), fill_value=False, dtype=np.bool)
-for uncertain_index in detections[uncertain_indices]:
-    position = loader.image_names.index(f"{int(uncertain_index[0]):03d}")
-    x, y = uncertain_index[[1, 2]]
-    state = list(
-        np.logical_and(
-            np.logical_and(
-                np.logical_and(indices[:, 0] <= x, indices[:, 1] <= y), indices[:, 2] >= x), indices[:, 3] >= y)
-    )
-    if True in state:
-        states[position, state.index(True)] = True
-    else:
-        failiures += 1
-
-detections_uncertain_indices = detections[uncertain_indices]
-for i, img_states in enumerate(states):
-    if not (True in img_states):
+uncertainty_status = UncertaintyStatus(
+    loader=data_loader,
+    model=retinanet_model,
+    class_list_file_path="annotations/labels.csv",
+    corrected_annotations_file_path="active_annotations/corrected.csv",
+)
+images_detections = uncertainty_status.get_active_predictions()
+images_states = uncertainty_status.load_uncertainty_states(boxes=images_detections)
+uncertain_detections = images_detections["uncertain"]
+noisy_detections = images_detections["noisy"]
+print("noisy_detections", noisy_detections.shape)
+direc = osp.expanduser('~/tmp/saffron_imgs')
+if osp.isdir(direc):
+    shutil.rmtree(direc)
+os.makedirs(direc, exist_ok=False)
+for i in range(len(data_loader.image_names)):
+    mask = uncertainty_status.get_mask(index=i)
+    # if not (True in mask):
+    #     continue
+    image = cv2.imread(osp.join(data_loader.img_dir, data_loader.image_names[i] + data_loader.ext)).astype(np.float64)
+    my_mask = np.ones(shape=mask.shape, dtype=np.float64)
+    my_mask[mask] *= 0.5
+    image *= my_mask
+    image = image.astype(np.uint8)
+    image_uncertain_detections = uncertain_detections[uncertain_detections[:, 0] == int(data_loader.image_names[i])]
+    image_noisy_detections = noisy_detections[noisy_detections[:, 0] == int(data_loader.image_names[i])]
+    if image_noisy_detections.shape[0] == 0 and image_uncertain_detections.shape[0] == 0:
         continue
-    img = cv2.imread(osp.join(loader.img_dir, loader.image_names[i] + loader.ext))
-    mask = Mask(image=img)
-    tuple(mask(index, state) for index, state in zip(indices, img_states))
-    img = mask.image.astype(np.uint8)
-    direc = '/tmp/saffron_imgs'
-    os.makedirs(direc, exist_ok=True)
-    image_uncertain_indices = detections_uncertain_indices[detections_uncertain_indices[:, 0] == int(loader.image_names[i])]
-    for index in image_uncertain_indices:
-        x, y = index[[1, 2]]
-        score = index[4]
-        cv2.circle(img, (int(x), int(y)), 3, (0, 0, 255), -1)
-        cv2.putText(img, f"{round(score, 2)}", (int(x + 2), int(y + 2)),  cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 3)
-    cv2.imwrite(osp.join(direc, loader.image_names[i] + loader.ext), img)
-
-
-# print("failiures", failiures)
+    for det in image_uncertain_detections:
+        x = int(det[1])
+        y = int(det[2])
+        alpha = det[3]
+        score = det[4]
+        # cv2.circle(image, (int(x), int(y)), 3, (0, 0, 255), -1)
+        image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+        cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+    for det in image_noisy_detections:
+        x = int(det[1])
+        y = int(det[2])
+        alpha = det[3]
+        score = det[4]
+        # cv2.circle(image, (int(x), int(y)), 3, (255, 0, 0), -1)
+        image = draw_line(image, (x, y), alpha, line_color=(255, 0, 0), center_color=(0, 0, 0), half_line=True,
+                          distance_thresh=40, line_thickness=2)
+        cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (255, 0, 0), 2)
+    cv2.imwrite(osp.join(direc, data_loader.image_names[i] + data_loader.ext), image)
