@@ -138,8 +138,8 @@ class Training:
                 image_scores = scores
                 image_labels = labels
                 img_name_col = np.full(shape=(len(image_scores), 1), fill_value=img_name, dtype=np.int32)
-                image_detections = np.concatenate([img_name_col, image_boxes, np.expand_dims(
-                    image_scores, axis=1), np.expand_dims(image_labels, axis=1)], axis=1)
+                image_detections = np.concatenate([img_name_col, image_boxes, np.expand_dims(image_labels, axis=1),
+                                                   np.expand_dims(image_scores, axis=1)], axis=1)
                 all_detections.extend(image_detections.tolist())
                 print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
         print()

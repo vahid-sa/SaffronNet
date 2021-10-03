@@ -135,7 +135,7 @@ class Dataset:
 
 class UncertaintyStatus:
     def __init__(self, loader, model, class_list_file_path, corrected_annotations_file_path, tiling_size=100):
-        self.NAME, self.X, self.Y, self.ALPHA, self.LABEL, self.TRUTH, self.SCORE = 0, 1, 2, 3, 4, 5, 5
+        self.NAME, self.X, self.Y, self.ALPHA, self.LABEL, self.TRUTH, self.SCORE = 0, 1, 2, 3, 5, 5, 4
         self.loader = loader
         self.model = model
         self.class_to_index, self.index_to_class = load_classes(csv_class_list_path=class_list_file_path)
@@ -262,11 +262,13 @@ images_detections = uncertainty_status.get_active_predictions()
 images_states = uncertainty_status.load_uncertainty_states(boxes=images_detections)
 uncertain_detections = images_detections["uncertain"]
 noisy_detections = images_detections["noisy"]
-print("noisy_detections", noisy_detections.shape)
+print("uncertain_detections", uncertain_detections.shape, min(uncertain_detections[:, 5]), max(uncertain_detections[:, 5]), len(np.unique(uncertain_detections[:, 0])), len(np.unique(uncertain_detections[:, 1])), len(np.unique(uncertain_detections[:, 2])), len(np.unique(uncertain_detections[:, 3])), len(np.unique(uncertain_detections[:, 4])), len(np.unique(uncertain_detections[:, 5])))
+print("noisy_detections", noisy_detections.shape, min(noisy_detections[:, 5]), max(noisy_detections[:, 5]), len(np.unique(noisy_detections[:, 0])), len(np.unique(noisy_detections[:, 1])), len(np.unique(noisy_detections[:, 2])), len(np.unique(noisy_detections[:, 3])), len(np.unique(noisy_detections[:, 4])), len(np.unique(noisy_detections[:, 5])))
 direc = osp.expanduser('~/tmp/saffron_imgs')
 if osp.isdir(direc):
     shutil.rmtree(direc)
 os.makedirs(direc, exist_ok=False)
+noisy_count, uncertain_count = 0, 0
 for i in range(len(data_loader.image_names)):
     mask = uncertainty_status.get_mask(index=i)
     # if not (True in mask):
@@ -281,20 +283,23 @@ for i in range(len(data_loader.image_names)):
     if image_noisy_detections.shape[0] == 0 and image_uncertain_detections.shape[0] == 0:
         continue
     for det in image_uncertain_detections:
+        uncertain_count += 1
         x = int(det[1])
         y = int(det[2])
         alpha = det[3]
-        score = det[4]
+        score = det[5]
         # cv2.circle(image, (int(x), int(y)), 3, (0, 0, 255), -1)
         image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
         cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
     for det in image_noisy_detections:
+        noisy_count += 1
         x = int(det[1])
         y = int(det[2])
         alpha = det[3]
-        score = det[4]
+        score = det[5]
         # cv2.circle(image, (int(x), int(y)), 3, (255, 0, 0), -1)
         image = draw_line(image, (x, y), alpha, line_color=(255, 0, 0), center_color=(0, 0, 0), half_line=True,
                           distance_thresh=40, line_thickness=2)
         cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (255, 0, 0), 2)
     cv2.imwrite(osp.join(direc, data_loader.image_names[i] + data_loader.ext), image)
+print(f"noisy_count: {noisy_count}    uncertain_count: {uncertain_count}")
