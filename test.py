@@ -178,10 +178,8 @@ class UncertaintyStatus:
     @staticmethod
     def _tile(image, size):
         top, left = np.mgrid[0:image.shape[0]:size, 0:image.shape[1]:size]
-        right = left + size - 1
-        bottom = top + size - 1
-        right[:, -1] = image.shape[1] - 1
-        bottom[:, -1] = image.shape[0] - 1
+        right = left + size
+        bottom = top + size
         left = np.expand_dims(left, axis=2)
         top = np.expand_dims(top, axis=2)
         right = np.expand_dims(right, axis=2)
@@ -241,7 +239,7 @@ dataset.column_wise = False
 
 data_loader = imageloader.CSVDataset(
     filenames_path="annotations/filenames.json",
-    partition="unsupervised",
+    partition="supervised",
     class_list=csv_classes,
     images_dir=images_dir,
     image_extension=".jpg",
@@ -249,7 +247,7 @@ data_loader = imageloader.CSVDataset(
 )
 
 retinanet_model = torch.load(osp.expanduser('~/Saffron/weights/supervised/init_model.pt'))
-retinanet.settings.NUM_QUERIES = 100
+retinanet.settings.NUM_QUERIES = 800
 retinanet.settings.NOISY_THRESH = 0.15
 
 uncertainty_status = UncertaintyStatus(
@@ -303,3 +301,4 @@ for i in range(len(data_loader.image_names)):
         cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (255, 0, 0), 2)
     cv2.imwrite(osp.join(direc, data_loader.image_names[i] + data_loader.ext), image)
 print(f"noisy_count: {noisy_count}    uncertain_count: {uncertain_count}")
+
