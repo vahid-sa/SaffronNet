@@ -134,19 +134,15 @@ class Dataset:
 
 
 class UncertaintyStatus:
-    def __init__(self, loader, model, class_list_file_path, corrected_annotations_file_path, tiling_size=100):
+    def __init__(self, loader, model, class_list_file_path, corrected_annotations_file_path, radius=50):
         self.NAME, self.X, self.Y, self.ALPHA, self.LABEL, self.TRUTH, self.SCORE = 0, 1, 2, 3, 5, 5, 4
+        self.radius = radius
         self.loader = loader
         self.model = model
         self.class_to_index, self.index_to_class = load_classes(csv_class_list_path=class_list_file_path)
         self.corrected_annotations_file_path = corrected_annotations_file_path
         self.img_pattern = cv2.imread(osp.join(self.loader.img_dir, self.loader.image_names[0] + self.loader.ext))
-        self.tiling_indices = UncertaintyStatus._tile(image=self.img_pattern, size=tiling_size)
-        self.tiling_states = np.full(
-            shape=(len(self.loader.image_names), len(self.tiling_indices)),
-            fill_value=False,
-            dtype=np.bool,
-        )
+        self.tile_states = np.full(shape=(len(self.loader.image_names), self.img_pattern.shape[0], self.img_pattern.shape[1]), fill_value=False, dtype=np.bool_)
 
     def _load_annotations(self, path: str) -> np.array:
         assert osp.isfile(path), "File does not exist."
@@ -175,19 +171,6 @@ class UncertaintyStatus:
             previous_corrected_names = np.array(list(), dtype=np.float64)
         return previous_corrected_names
 
-    @staticmethod
-    def _tile(image, size):
-        top, left = np.mgrid[0:image.shape[0]:size, 0:image.shape[1]:size]
-        right = left + size
-        bottom = top + size
-        left = np.expand_dims(left, axis=2)
-        top = np.expand_dims(top, axis=2)
-        right = np.expand_dims(right, axis=2)
-        bottom = np.expand_dims(bottom, axis=2)
-        indices = np.concatenate([left, top, right, bottom], axis=-1)
-        indices = indices.reshape((-1, indices.shape[-1]))
-        return indices
-
     def get_active_predictions(self):
         detections = detect(dataset=self.loader, retinanet_model=self.model)
         previous_corrected_names = self._get_previous_corrected_annotation_names()
@@ -201,33 +184,21 @@ class UncertaintyStatus:
 
     def load_uncertainty_states(self, boxes):
         uncertain_boxes, noisy_boxes = boxes["uncertain"], boxes["noisy"]
-        self.tiling_states[:, :] = False
+        self.tile_states[:, :, :] = False
         for uncertain_box in uncertain_boxes:
             position = self.loader.image_names.index(f"{int(uncertain_box[self.NAME]):03d}")
-            x, y = uncertain_box[[self.X, self.Y]]
-            state = list(
-                np.logical_and(
-                    np.logical_and(
-                        np.logical_and(self.tiling_indices[:, 0] <= x, self.tiling_indices[:, 1] <= y),
-                        self.tiling_indices[:, 2] >= x),
-                    self.tiling_indices[:, 3] >= y,
-                )
-            )
-            # Remove noisy boxes in uncertain states
-            if True in state:
-                self.tiling_states[position, state.index(True)] = True
-        return self.tiling_states
+            x = int(uncertain_box[self.X])
+            y = int(uncertain_box[self.Y])
+            self.tile_states[position, y, x] = True
 
     def get_mask(self, index):
-        img = cv2.imread(osp.join(self.loader.img_dir, self.loader.image_names[index] + self.loader.ext))
-        mask = np.full(shape=img.shape, fill_value=False, dtype=np.bool)
-        img_states = self.tiling_states[index]
-        if True in img_states:
-            for index, state in zip(self.tiling_indices, img_states):
-                left, top, right, bottom = index
-                if state:
-                    mask[top:bottom, left:right] = True
-        return mask
+        tile_states = self.tile_states[index]
+        true_indices = np.argwhere(tile_states)
+        tile_mask = np.full(shape=tile_states.shape, fill_value=False, dtype=np.bool_)
+        for index in true_indices:
+            i, j = index
+            tile_mask[i - self.radius: i + self.radius, j - self.radius: j + self.radius] = True
+        return tile_mask
 
 
 images_dir = osp.expanduser("~/Saffron/dataset/Train")
@@ -239,15 +210,14 @@ dataset.column_wise = False
 
 data_loader = imageloader.CSVDataset(
     filenames_path="annotations/filenames.json",
-    partition="supervised",
+    partition="unsupervised",
     class_list=csv_classes,
     images_dir=images_dir,
     image_extension=".jpg",
     transform=torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
 )
-
 retinanet_model = torch.load(osp.expanduser('~/Saffron/weights/supervised/init_model.pt'))
-retinanet.settings.NUM_QUERIES = 800
+retinanet.settings.NUM_QUERIES = 100
 retinanet.settings.NOISY_THRESH = 0.15
 
 uncertainty_status = UncertaintyStatus(
@@ -257,7 +227,7 @@ uncertainty_status = UncertaintyStatus(
     corrected_annotations_file_path="active_annotations/corrected.csv",
 )
 images_detections = uncertainty_status.get_active_predictions()
-images_states = uncertainty_status.load_uncertainty_states(boxes=images_detections)
+uncertainty_status.load_uncertainty_states(boxes=images_detections)
 uncertain_detections = images_detections["uncertain"]
 noisy_detections = images_detections["noisy"]
 print("uncertain_detections", uncertain_detections.shape, min(uncertain_detections[:, 5]), max(uncertain_detections[:, 5]), len(np.unique(uncertain_detections[:, 0])), len(np.unique(uncertain_detections[:, 1])), len(np.unique(uncertain_detections[:, 2])), len(np.unique(uncertain_detections[:, 3])), len(np.unique(uncertain_detections[:, 4])), len(np.unique(uncertain_detections[:, 5])))
@@ -269,10 +239,8 @@ os.makedirs(direc, exist_ok=False)
 noisy_count, uncertain_count = 0, 0
 for i in range(len(data_loader.image_names)):
     mask = uncertainty_status.get_mask(index=i)
-    # if not (True in mask):
-    #     continue
     image = cv2.imread(osp.join(data_loader.img_dir, data_loader.image_names[i] + data_loader.ext)).astype(np.float64)
-    my_mask = np.ones(shape=mask.shape, dtype=np.float64)
+    my_mask = np.ones(shape=image.shape, dtype=np.float64)
     my_mask[mask] *= 0.5
     image *= my_mask
     image = image.astype(np.uint8)
