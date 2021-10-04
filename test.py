@@ -185,19 +185,15 @@ class UncertaintyStatus:
     def load_uncertainty_states(self, boxes):
         uncertain_boxes, noisy_boxes = boxes["uncertain"], boxes["noisy"]
         self.tile_states[:, :, :] = False
+        r = self.radius
         for uncertain_box in uncertain_boxes:
             position = self.loader.image_names.index(f"{int(uncertain_box[self.NAME]):03d}")
             x = int(uncertain_box[self.X])
             y = int(uncertain_box[self.Y])
-            self.tile_states[position, y, x] = True
+            self.tile_states[position, y-r:y+r, x-r:x+r] = True
 
     def get_mask(self, index):
-        tile_states = self.tile_states[index]
-        true_indices = np.argwhere(tile_states)
-        tile_mask = np.full(shape=tile_states.shape, fill_value=False, dtype=np.bool_)
-        for index in true_indices:
-            i, j = index
-            tile_mask[i - self.radius: i + self.radius, j - self.radius: j + self.radius] = True
+        tile_mask = self.tile_states[index]
         return tile_mask
 
 
