@@ -25,7 +25,7 @@ import skimage.transform
 import skimage.color
 import random
 import skimage
-import cv2 as cv
+from cv2 import cv2 as cv
 
 from PIL import Image
 from .settings import NUM_VARIABLES

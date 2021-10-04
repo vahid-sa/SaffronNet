@@ -50,7 +50,3 @@ def get_detections(dataset, retinanet):
             print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
     print()
     return np.asarray(all_detections, dtype=np.float64)
-
-
-
-
