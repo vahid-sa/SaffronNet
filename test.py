@@ -12,6 +12,7 @@ from retinanet.utils import load_classes
 from utils.prediction import detect
 from utils.visutils import draw_line
 from retinanet import dataloader
+from retinanet.utils import ActiveLabelMode
 import retinanet
 
 
@@ -174,6 +175,7 @@ class UncertaintyStatus:
 
     def get_active_predictions(self):
         detections = detect(dataset=self.loader, retinanet_model=self.model)
+        detections[:, [self.X, self.Y, self.ALPHA]] = np.around(detections[:, [self.X, self.Y, self.ALPHA]])
         previous_corrected_names = self._get_previous_corrected_annotation_names()
         print(f"detections: {detections.shape} {detections.dtype}\nprevious {len(previous_corrected_names)}")
         uncertain_boxes, noisy_boxes = split_uncertain_and_noisy(
@@ -198,13 +200,58 @@ class UncertaintyStatus:
         return tile_mask
 
 
-def correct_uncertains(annotations, uncertainty_mask):
-    X, Y = 0, 1
-    gt_yx = annotations[:, Y].astype(np.int64), annotations[:, X].astype(np.int64)
-    status = uncertainty_mask[gt_yx]
-    in_uncertain_gt_indices = np.squeeze(np.argwhere(status), axis=-1)
-    in_uncertain_gt_annotations = annotations[in_uncertain_gt_indices]
-    return in_uncertain_gt_indices, in_uncertain_gt_annotations
+class ActiveStatus:
+    def __init__(self, data_loader):
+        self._data_loader = data_loader
+
+    def _get_ground_truth_annotations(self, index):
+        img = cv2.imread(self._data_loader.image_names[index])
+        rows, cols = img.shape[0], img.shape[1]
+        annotations = self._data_loader[index]["annot"].cpu().detach().numpy()
+        is_valid = np.logical_and((annotations[:, 0] < cols), (annotations[:, 1] < rows))
+        annotations = annotations[is_valid]
+        return annotations
+
+    @staticmethod
+    def _correct_uncertains(annotations, uncertainty_state):
+        X, Y = 0, 1
+        gt_yx = annotations[:, Y].astype(np.int64), annotations[:, X].astype(np.int64)
+        status = uncertainty_state[gt_yx]
+        in_uncertain_gt_indices = np.squeeze(np.argwhere(status), axis=-1)
+        in_uncertain_gt_annotations = annotations[in_uncertain_gt_indices]
+        return in_uncertain_gt_annotations
+
+    @staticmethod
+    def concat_noisy_and_corrected_boxes(corrected_boxes, noisy_boxes):
+        corrected_boxes = corrected_boxes[:, :5]
+        corrected_col = np.full(shape=(corrected_boxes.shape[0], 1), fill_value=ActiveLabelMode.corrected.value, dtype=corrected_boxes.dtype)
+        corrected_boxes = np.concatenate([corrected_boxes, corrected_col], axis=1)
+
+        noisy_boxes = noisy_boxes[:, :5]
+        noisy_col = np.full(shape=(noisy_boxes.shape[0], 1), fill_value=ActiveLabelMode.noisy.value, dtype=noisy_boxes.dtype)
+        noisy_boxes = np.concatenate([noisy_boxes, noisy_col], axis=1)
+
+        active_annotations = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
+        active_annotations = active_annotations[active_annotations[:, 0].argsort(), :]
+        return active_annotations
+
+    def correct(self, uncertainty_states):
+        corrected_annotations = []
+        for i in range(len(self._data_loader.image_names)):
+            uncertainty_state = uncertainty_states[i]
+            gt_annotations = self._get_ground_truth_annotations(index=i)
+            if len(gt_annotations) == 0:
+                continue
+            in_uncertain_gt_annotations = ActiveStatus._correct_uncertains(
+                annotations=gt_annotations,
+                uncertainty_state=uncertainty_state,
+            )
+            img_number = int(osp.splitext(osp.basename(self._data_loader.image_names[i]))[0])
+            img_number_col = np.full(shape=(in_uncertain_gt_annotations.shape[0], 1), fill_value=img_number)
+            in_uncertain_gt_annotations = np.concatenate([img_number_col, in_uncertain_gt_annotations], axis=1)
+            corrected_annotations.extend(in_uncertain_gt_annotations.tolist())
+        corrected_annotations = np.asarray(corrected_annotations)
+        return corrected_annotations
 
 
 images_dir = osp.expanduser("~/Saffron/dataset/Train")
@@ -227,6 +274,7 @@ data_loader = dataloader.CSVDataset(
     class_list=csv_classes,
     images_dir=images_dir,
     transform=torchvision.transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
+
 )
 
 retinanet_model = torch.load(osp.expanduser('~/Saffron/weights/supervised/init_model.pt'))
@@ -241,61 +289,64 @@ uncertainty_status = UncertaintyStatus(
 )
 images_detections = uncertainty_status.get_active_predictions()
 uncertainty_status.load_uncertainty_states(boxes=images_detections)
+
 uncertain_detections = images_detections["uncertain"]
 noisy_detections = images_detections["noisy"]
-print("uncertain_detections", uncertain_detections.shape, min(uncertain_detections[:, 5]), max(uncertain_detections[:, 5]), len(np.unique(uncertain_detections[:, 0])), len(np.unique(uncertain_detections[:, 1])), len(np.unique(uncertain_detections[:, 2])), len(np.unique(uncertain_detections[:, 3])), len(np.unique(uncertain_detections[:, 4])), len(np.unique(uncertain_detections[:, 5])))
-print("noisy_detections", noisy_detections.shape, min(noisy_detections[:, 5]), max(noisy_detections[:, 5]), len(np.unique(noisy_detections[:, 0])), len(np.unique(noisy_detections[:, 1])), len(np.unique(noisy_detections[:, 2])), len(np.unique(noisy_detections[:, 3])), len(np.unique(noisy_detections[:, 4])), len(np.unique(noisy_detections[:, 5])))
+
+active_status = ActiveStatus(data_loader=data_loader)
+corrected_annotations = active_status.correct(uncertainty_states=uncertainty_status.tile_states)
+active_annotations = ActiveStatus.concat_noisy_and_corrected_boxes(corrected_boxes=corrected_annotations, noisy_boxes=noisy_detections)
+active_states = uncertainty_status.tile_states
+
 direc = osp.expanduser('~/tmp/saffron_imgs')
-if osp.isdir(direc):
-    shutil.rmtree(direc)
-os.makedirs(direc, exist_ok=False)
-noisy_count, uncertain_count = 0, 0
 for i in range(len(image_loader.image_names)):
-    mask = uncertainty_status.get_mask(index=i)
-    image = cv2.imread(osp.join(image_loader.img_dir, image_loader.image_names[i] + image_loader.ext)).astype(np.float64)
+    image = cv2.imread(osp.join(image_loader.img_dir, image_loader.image_names[i] + image_loader.ext))
     my_mask = np.ones(shape=image.shape, dtype=np.float64)
+    mask = active_states[i]
     my_mask[mask] *= 0.5
-    image *= my_mask
+    image = image.astype(np.float64) * my_mask
     image = image.astype(np.uint8)
-    image_uncertain_detections = uncertain_detections[uncertain_detections[:, 0] == int(image_loader.image_names[i])]
     image_noisy_detections = noisy_detections[noisy_detections[:, 0] == int(image_loader.image_names[i])]
-    if image_noisy_detections.shape[0] == 0 and image_uncertain_detections.shape[0] == 0:
-        continue
-    assert image_loader.image_names[i] in data_loader.image_names[i]
-    annotations = data_loader[i]["annot"].cpu().detach().numpy()
-    is_valid = np.logical_and((annotations[:, 0] < image.shape[1]), (annotations[:, 1] < image.shape[0]))
-    annotations = annotations[is_valid]
-    in_uncertain_annotation_indices, in_uncertain_annotations = correct_uncertains(annotations, mask)
-    for annot in annotations:
-        x = int(annot[0])
-        y = int(annot[1])
-        alpha = annot[2]
-        image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
-                          distance_thresh=40, line_thickness=2)
+    image_uncertain_detections = uncertain_detections[uncertain_detections[:, 0] == int(image_loader.image_names[i])]
+    image_active_annotations = active_annotations[active_annotations[:, 0] == int(image_loader.image_names[i])]
+    image_corrected_annotations = corrected_annotations[corrected_annotations[:, 0] == int(image_loader.image_names[i])]
+
     for det in image_uncertain_detections:
-        uncertain_count += 1
         x = int(det[1])
         y = int(det[2])
         alpha = det[3]
         score = det[5]
-        # cv2.circle(image, (int(x), int(y)), 3, (0, 0, 255), -1)
         image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
         cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+
     for det in image_noisy_detections:
-        noisy_count += 1
         x = int(det[1])
         y = int(det[2])
         alpha = det[3]
         score = det[5]
-        # cv2.circle(image, (int(x), int(y)), 3, (255, 0, 0), -1)
-        image = draw_line(image, (x, y), alpha, line_color=(255, 0, 0), center_color=(0, 0, 0), half_line=True,
+        image = draw_line(image, (x, y), alpha, line_color=(0, 255, 255), center_color=(0, 0, 0), half_line=True,
                           distance_thresh=40, line_thickness=2)
-        cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (255, 0, 0), 2)
-    for annot in in_uncertain_annotations:
-        x = int(annot[0])
-        y = int(annot[1])
-        alpha = annot[2]
-        image = draw_line(image, (x, y), alpha, line_color=(0, 255, 0), center_color=(0, 0, 0), half_line=True,
+        cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 255, 255), 2)
+
+    for annot in image_corrected_annotations:
+        x = int(annot[1])
+        y = int(annot[2])
+        alpha = annot[3]
+        score = annot[5]
+        image = draw_line(image, (x, y), alpha, line_color=(255, 255, 0), center_color=(0, 0, 0), half_line=True,
                           distance_thresh=40, line_thickness=2)
-    cv2.imwrite(osp.join(direc, image_loader.image_names[i] + image_loader.ext), image)
-print(f"noisy_count: {noisy_count}    uncertain_count: {uncertain_count}")
+
+    for annot in image_active_annotations:
+        x = int(annot[1])
+        y = int(annot[2])
+        alpha = annot[3]
+        status = annot[-1]
+        if status == ActiveLabelMode.corrected.value:
+            color = (0, 255, 0)
+        elif status == ActiveLabelMode.noisy.value:
+            color = (255, 0, 0)
+        else:
+            color = (0, 0, 0)
+        image = draw_line(image, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True,
+                          distance_thresh=40, line_thickness=2)
+        cv2.imwrite(osp.join(direc, image_loader.image_names[i] + image_loader.ext), image)
