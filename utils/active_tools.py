@@ -1,5 +1,6 @@
 import numpy as np
 import csv
+import glob
 from cv2 import cv2
 from os import path as osp
 
@@ -70,6 +71,14 @@ class UncertaintyStatus:
     def get_mask(self, index):
         tile_mask = self.tile_states[index]
         return tile_mask
+
+    def write_states(self, directory):
+        assert len(self.loader.image_names) == self.tile_states.shape[0]
+        for i in range(len(self.loader.image_names)):
+            state = self.tile_states[i]
+            path = osp.join(directory, self.loader.image_names[i] + ".npy")
+            with open(path, "wb") as fileIO:
+                np.save(fileIO, state)
 
 
 class ActiveStatus:
@@ -155,12 +164,6 @@ def write_active_annotations(annotations, path, class_list_path):
             status_name = ActiveLabelModeSTR.noisy.value
         else:
             raise ValueError(f"'{status} is not a correct value'")
-        row = [img_name, x, y, alpha, label_name, status_name]
+        row = [img_name, x, y, 90 - alpha, label_name, status_name]
         writer.writerow(row)
-    fileIO.close()
-
-
-def write_states(states, path):
-    fileIO = open(path, "wb")
-    np.save(fileIO, states)
     fileIO.close()
