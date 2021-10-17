@@ -2,6 +2,8 @@ from __future__ import print_function, division
 import enum
 import sys
 import os
+
+import cv2
 from numpy.lib import NumpyVersion
 import torch
 import numpy as np
@@ -12,6 +14,7 @@ from torch.utils.data import Dataset
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
+from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from utils.visutils import DrawMode, draw_line, get_alpha, get_dots, std_draw_line, std_draw_points, normalize_alpha
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -78,6 +81,7 @@ class CocoDataset(Dataset):
 
         img, img_name = self.load_image(idx)
         annot = self.load_annotations(idx)
+
         sample = {'img': img, 'annot': annot, 'name': img_name}
         if self.transform:
             sample = self.transform(sample)
@@ -142,7 +146,7 @@ class CocoDataset(Dataset):
 class CSVDataset(Dataset):
     """CSV dataset."""
 
-    def __init__(self, train_file, class_list, images_dir, image_extension=".jpg", transform=None):
+    def __init__(self, train_file, class_list, images_dir, ground_truth_states_directory=None, image_extension=".jpg", transform=None):
         """
         Args:
             train_file (string): CSV file with training annotations
@@ -176,6 +180,7 @@ class CSVDataset(Dataset):
             raise(ValueError(
                 'invalid CSV annotations file: {}: {}'.format(self.train_file, e)))
         self.image_names = list(self.image_data.keys())
+        self.gt_states_dir = ground_truth_states_directory
 
     def _parse(self, value, function, fmt):
         """
@@ -224,14 +229,34 @@ class CSVDataset(Dataset):
         return len(self.image_names)
 
     def __getitem__(self, idx):
-
         img = self.load_image(idx)
         annot = self.load_annotations(idx)
-        sample = {'img': img, 'annot': annot}
+        gt_state = self.load_state(idx)
+        original_annot = annot.copy()
+        original_state = np.logical_not(gt_state.astype(np.bool_))
+        sample = {'img': img, 'annot': annot, 'gt_state': gt_state}
         if self.transform:
             sample = self.transform(sample)
-
+        sample['gt_state'] = torch.logical_not(sample['gt_state'].type(torch.BoolTensor))
+        sample['orig_annot'] = original_annot
+        sample['orig_state'] = original_state
         return sample
+
+    def load_state(self, index):
+        if self.gt_states_dir is None:
+            img = self.load_image(index)
+            state = np.ones(shape=(img.shape[0], img.shape[1], 1), dtype=np.uint8)
+        else:
+            str_number = os.path.splitext(os.path.basename(self.image_names[index]))[0]
+            name = str_number + '.npy'
+            path = os.path.join(self.gt_states_dir, name)
+            fileIO = open(path, "rb")
+            state = np.load(fileIO)
+            fileIO.close()
+            state = np.expand_dims(state, axis=-1)
+            state = np.logical_not(state)
+            state = state.astype(np.uint8)
+        return state
 
     def load_image(self, image_index):
         img = cv.imread(self.image_names[image_index])
@@ -243,16 +268,8 @@ class CSVDataset(Dataset):
 
         return img.astype(np.float32)/255.0
 
-# def load_image(self, image_index):
-#         img = skimage.io.imread(self.image_names[image_index])
-
-#         if len(img.shape) == 2:
-#             img = skimage.color.gray2rgb(img)
-
-#         return img.astype(np.float32)/255.0
-
     def __active_status_string_to_int(self, str_status: str) -> utils.ActiveLabelMode:
-        if str_status == utils.ActiveLabelModeSTR.corrected.value:
+        if str_status == utils.ActiveLabelModeSTR.gt.value:
             int_status = utils.ActiveLabelMode.corrected.value
         elif str_status == utils.ActiveLabelModeSTR.noisy.value:
             int_status = utils.ActiveLabelMode.noisy.value
@@ -300,7 +317,7 @@ class CSVDataset(Dataset):
             try:
                 if len(row) == 5:
                     img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
-                    label_status = utils.ActiveLabelModeSTR.corrected.value
+                    label_status = utils.ActiveLabelModeSTR.gt.value
                 elif len(row) > 5:
                     img_id, ctr_x, ctr_y, alpha, class_name, label_status = row[:6]
                 else:
@@ -396,7 +413,7 @@ class Resizer(object):
     """
 
     def __call__(self, sample, min_side=608, max_side=1024):
-        image, annots = sample['img'], sample['annot']
+        image, annots, gt_state = sample['img'], sample['annot'], sample['gt_state']
 
         rows, cols, cns = image.shape
 
@@ -416,6 +433,8 @@ class Resizer(object):
         # resize the image with the computed scale
         image = skimage.transform.resize(
             image, (int(round(rows*scale)), int(round((cols*scale)))))
+        gt_state = skimage.transform.resize(
+            gt_state, (int(round(rows * scale)), int(round((cols * scale)))))
         rows, cols, cns = image.shape
 
         pad_w = 32 - rows % 32
@@ -425,15 +444,20 @@ class Resizer(object):
             (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
 
+        new_gt_state = np.zeros((rows + pad_w, cols + pad_h, 1)).astype(np.float32)
+        new_gt_state[:rows, :cols, :] = gt_state.astype(np.float32)
         annots[:, :NUM_VARIABLES] *= scale
 
-        return {'img': torch.from_numpy(new_image), 'annot': torch.from_numpy(annots), 'scale': scale}
+        return {
+            'img': torch.from_numpy(new_image),
+            'annot': torch.from_numpy(annots),
+            'scale': scale,
+            'gt_state': torch.from_numpy(new_gt_state),
+        }
 
 
 class Augmenter(object):
     """Convert ndarrays in sample to Tensors."""
-    """ #
-    """
 
     def __init__(self) -> None:
         super().__init__()
@@ -454,17 +478,24 @@ class Augmenter(object):
 
         if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
+            gt_state = np.squeeze(sample["gt_state"]).astype(np.bool_)
+
             new_annots = annots.copy()
             kps = []
             for x, y, alpha in annots[:, :NUM_VARIABLES]:
                 x0, y0, x1, y1 = get_dots(x, y, alpha, distance_thresh=60)
                 kps.append(Keypoint(x=x0, y=y0))
                 kps.append(Keypoint(x=x1, y=y1))
-
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
 
-            image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
-            imgaug_copy = image_aug.copy()
+            segmap = SegmentationMapsOnImage(gt_state, shape=image.shape)
+            image_aug, kpsoi_aug, gt_state_aug = self.seq(image=image, keypoints=kpsoi, segmentation_maps=segmap)
+            gt_state_aug = np.squeeze(np.array(gt_state_aug.draw(size=gt_state.shape)))
+            gt_state_aug = cv2.cvtColor(gt_state_aug, cv2.COLOR_BGR2GRAY)
+            gt_state_aug = np.expand_dims(gt_state_aug, axis=-1)
+            """
+            Might be need to reverse 0, and 1 in gt_state, so that new values in gt_state_aug remind ground_truth
+            """
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -482,18 +513,13 @@ class Augmenter(object):
             y_in_bound = np.logical_and(
                 new_annots[:, 1] > 0, new_annots[:, 1] < image_aug.shape[0])
             in_bound = np.logical_and(x_in_bound, y_in_bound)
-
             new_annots = new_annots[in_bound, :]
-            for x, y, alpha, _, _ in new_annots:
-                imgaug_copy = std_draw_line(
-                    imgaug_copy,
-                    point=(x, y),
-                    alpha=alpha,
-                    mode=DrawMode.Accept
-                )
-            cv.imwrite('/content/drive/MyDrive/Dataset/TrainDebugOutput/{}.png'.format(
-                np.random.randint(0, 1000)), imgaug_copy)
-            sample = {'img': image_aug, 'annot': new_annots}
+
+            sample = {
+                'img': image_aug,
+                'annot': new_annots,
+                'gt_state': gt_state_aug,
+            }
 
         return sample
 
@@ -507,8 +533,8 @@ class Normalizer(object):
         self.std = np.array([[[0.229, 0.224, 0.225]]])
 
     def __call__(self, sample):
-        image, annots = sample['img'], sample['annot']
-        return {'img': ((image.astype(np.float32)-self.mean)/self.std), 'annot': annots}
+        image, annots, gt_state = sample['img'], sample['annot'], sample['gt_state']
+        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots, 'gt_state': gt_state}
 
 
 class UnNormalizer(object):
