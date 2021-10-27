@@ -1,8 +1,11 @@
+import sys
 import numpy as np
 from cv2 import cv2
 import torchvision
 from os import path as osp
 import torch
+sys.path.append(osp.abspath("../"))
+sys.path.append(osp.abspath("./"))
 from prediction import imageloader
 from utils.visutils import draw_line
 from retinanet import dataloader
@@ -19,13 +22,13 @@ def unnormalize(img):
 
 
 images_dir = osp.expanduser("~/Saffron/dataset/Train")
-csv_classes = osp.abspath("annotations/labels.csv")
-csv_anots = osp.abspath("annotations/test.csv")
+csv_classes = osp.abspath("./annotations/labels.csv")
+csv_anots = osp.abspath("./annotations/test.csv")
 states_dir = osp.expanduser("~/Saffron/active_annotations/states")
 
 """"""
 image_loader = imageloader.CSVDataset(
-    filenames_path="annotations/filenames.json",
+    filenames_path="./annotations/filenames.json",
     partition="supervised",
     class_list=csv_classes,
     images_dir=images_dir,
@@ -34,7 +37,7 @@ image_loader = imageloader.CSVDataset(
 )
 
 data_loader = dataloader.CSVDataset(
-    train_file="annotations/supervised.csv",
+    train_file="./annotations/supervised.csv",
     class_list=csv_classes,
     images_dir=images_dir,
     transform=torchvision.transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
@@ -47,10 +50,11 @@ retinanet.settings.NOISY_THRESH = 0.15
 uncertainty_status = UncertaintyStatus(
     loader=image_loader,
     model=retinanet_model,
-    class_list_file_path="annotations/labels.csv",
+    class_list_file_path="./annotations/labels.csv",
     corrected_annotations_file_path="active_annotations/corrected.csv",
 )
 images_detections = uncertainty_status.get_active_predictions()
+# images_detections["noisy"] = uncertainty_status.load_uncertainty_states(boxes=images_detections)
 uncertainty_status.load_uncertainty_states(boxes=images_detections)
 uncertainty_status.write_states(directory=states_dir)
 uncertain_detections = images_detections["uncertain"]
@@ -219,4 +223,3 @@ for i in range(len(data_loader)):
     img_name = osp.basename(original_path)
     write_path = osp.join(direc, img_name)
     cv2.imwrite(write_path, img)
-

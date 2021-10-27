@@ -67,6 +67,19 @@ class UncertaintyStatus:
             x = int(uncertain_box[self.X])
             y = int(uncertain_box[self.Y])
             self.tile_states[position, y-r:y+r, x-r:x+r] = True
+        new_noisy_boxes = self._remove_noisy_annotations_in_ground_truth_states(noisy_boxes=noisy_boxes)
+        return new_noisy_boxes
+
+    def _remove_noisy_annotations_in_ground_truth_states(self, noisy_boxes):
+        indices = list()
+        for i, box in enumerate(noisy_boxes):
+            position = self.loader.image_names.index(f"{int(box[self.NAME]):03d}")
+            x = int(box[self.X])
+            y = int(box[self.Y])
+            if not self.tile_states[position, y, x]:
+                indices.append(i)
+        new_noisy_boxes = noisy_boxes[indices]
+        return new_noisy_boxes
 
     def get_mask(self, index):
         tile_mask = self.tile_states[index]

@@ -146,7 +146,7 @@ class CocoDataset(Dataset):
 class CSVDataset(Dataset):
     """CSV dataset."""
 
-    def __init__(self, train_file, class_list, images_dir, ground_truth_states_directory=None, image_extension=".jpg", transform=None):
+    def __init__(self, train_file, class_list, images_dir, ground_truth_states_directory=None, image_extension=".jpg", transform=None, save_output_img_directory=None):
         """
         Args:
             train_file (string): CSV file with training annotations
@@ -158,7 +158,11 @@ class CSVDataset(Dataset):
         self.transform = transform
         self.img_dir = images_dir
         self.ext = image_extension
-
+        if save_output_img_directory is None:
+            self.save_output_img_directory = None
+        else:
+            self.save_output_img_directory = os.path.join(save_output_img_directory, "dataloader")
+            os.makedirs(self.save_output_img_directory, exist_ok=True)
         # parse the provided class file
         try:
             with self._open_for_csv(self.class_list) as file:
@@ -225,6 +229,18 @@ class CSVDataset(Dataset):
             result[class_name] = class_id
         return result
 
+    def write_img(self, img, idx, normalized=True):
+        img_name = os.path.basename(self.image_names[idx])
+        path = os.path.join(self.save_output_img_directory, img_name)
+        im = img.numpy() if isinstance(img, torch.Tensor) else img.copy()
+        if normalized:
+            mean = [0.485, 0.456, 0.406]
+            std = [0.229, 0.224, 0.225]
+            im = (im.astype(np.float64) * std + mean) * 255.0
+        im = cv2.cvtColor(im.astype(np.uint8), cv2.COLOR_RGB2BGR)
+        cv2.imwrite(path, im)
+        return path
+
     def __len__(self):
         return len(self.image_names)
 
@@ -240,6 +256,11 @@ class CSVDataset(Dataset):
         sample['gt_state'] = torch.logical_not(sample['gt_state'].type(torch.BoolTensor))
         sample['orig_annot'] = original_annot
         sample['orig_state'] = original_state
+        if self.save_output_img_directory is None:
+            sample['aug_img_path'] = None
+        else:
+            aug_img_path = self.write_img(img=sample["img"], idx=idx)
+            sample['aug_img_path'] = aug_img_path
         return sample
 
     def load_state(self, index):
@@ -352,6 +373,7 @@ class CSVDataset(Dataset):
 
             result[img_file].append(
                 {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name, 'ground_truth': ground_truth})
+
         return result
 
     def name_to_label(self, name):
@@ -373,6 +395,8 @@ def collater(data):
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
+    states = [s['gt_state'].detach().cpu().tolist() for s in data]
+    aug_img_path = [s['aug_img_path'] for s in data]
 
     widths = [int(s.shape[0]) for s in imgs]
     heights = [int(s.shape[1]) for s in imgs]
@@ -404,7 +428,11 @@ def collater(data):
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
 
-    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales}
+    states = np.asarray(states, dtype=np.bool_)
+    device = data[0]['gt_state'].device
+    states = torch.from_numpy(states).to(device)
+
+    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales, 'gt_state': states, 'aug_img_path': aug_img_path}
 
 
 class Resizer(object):
@@ -538,25 +566,44 @@ class Normalizer(object):
 
 
 class UnNormalizer(object):
-    def __init__(self, mean=None, std=None):
-        if mean == None:
-            self.mean = [0.485, 0.456, 0.406]
-        else:
-            self.mean = mean
-        if std == None:
-            self.std = [0.229, 0.224, 0.225]
-        else:
-            self.std = std
+    def __init__(self, mean=None, std=None, standarded=True):
+        self.mean = [0.485, 0.456, 0.406] if (mean is None) else mean
+        self.std = [0.229, 0.224, 0.225] if (std is None) else std
+        self.coefficient = 255.0 if standarded else 1.0
 
-    def __call__(self, tensor):
-        """
-        Args:
-            tensor (Tensor): Tensor image of size (C, H, W) to be normalized.
-        Returns:
-            Tensor: Normalized image.
-        """
-        for t, m, s in zip(tensor, self.mean, self.std):
-            t.mul_(s).add_(m)
+    def __call__(self, image: (torch.Tensor, np.ndarray)):
+        tensor = UnNormalizer._get_tensor(image=image)
+        dtype, shape = tensor.dtype, tensor.shape
+        tensor = tensor.to(dtype=torch.float64)
+        tensor = self._reshape_tensor(tensor=tensor)
+        tensor = self._normalize(input_tensor=tensor)
+        tensor.mul_(self.coefficient)
+        tensor = tensor.to(dtype=dtype)
+        tensor = tensor.reshape(shape=shape)
+        output = tensor.numpy() if isinstance(image, np.ndarray) else tensor
+        return output
+
+    def _normalize(self, input_tensor: torch.Tensor):
+        tensor = torch.clone(input_tensor)
+        for i in range(tensor.shape[0]):
+            tensor[i].mul_(self.std[i])
+            tensor[i].add_(self.mean[i])
+        return tensor
+
+    def _reshape_tensor(self, tensor: torch.Tensor):
+        assert len(self.mean) == len(self.std), "mean and std should be equal shapes"
+        assert len(self.mean) in tensor.shape, "input tensor and mean size are not compatible"
+        reshaped_tensor = tensor.reshape((len(self.mean), -1))
+        return reshaped_tensor
+
+    @staticmethod
+    def _get_tensor(image):
+        if isinstance(image, torch.Tensor):
+            tensor = torch.clone(image)
+        elif isinstance(image, np.ndarray):
+            tensor = torch.from_numpy(image)
+        else:
+            raise TypeError("Incorrect input type")
         return tensor
 
 
