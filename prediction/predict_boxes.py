@@ -43,8 +43,4 @@ def split_uncertain_and_noisy(boxes, previous_corrected_boxes_names):
     )
     uncertain_boxes = boxes[uncertain_indices]
     noisy_boxes = boxes[noisy_indices]
-    # status = np.full(shape=(len(boxes), 1), dtype=np.float64, fill_value=-1)
-    # status[uncertain_indices] = 0
-    # status[noisy_indices] = 1
     return uncertain_boxes, noisy_boxes
-    # return np.concatenate((boxes, status), axis=1)

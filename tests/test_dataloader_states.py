@@ -1,9 +1,11 @@
+import os
 import sys
 import numpy as np
 from cv2 import cv2
 import torchvision
 from os import path as osp
 import torch
+import logging
 sys.path.append(osp.abspath("../"))
 sys.path.append(osp.abspath("./"))
 from prediction import imageloader
@@ -11,8 +13,9 @@ from utils.visutils import draw_line
 from retinanet import dataloader
 import retinanet
 
-from utils.active_tools import ActiveStatus, UncertaintyStatus, write_corrected_annotations, write_active_annotations
-
+from utils.active_tools import Active
+from retinanet.utils import ActiveLabelMode
+logging.basicConfig(level=logging.DEBUG)
 
 def unnormalize(img):
     mean = [0.485, 0.456, 0.406]
@@ -47,28 +50,44 @@ retinanet_model = torch.load(osp.expanduser('~/Saffron/weights/supervised/init_m
 retinanet.settings.NUM_QUERIES = 100
 retinanet.settings.NOISY_THRESH = 0.15
 
-uncertainty_status = UncertaintyStatus(
-    loader=image_loader,
+# uncertainty_status = UncertaintyStatus(
+#     loader=image_loader,
+#     model=retinanet_model,
+#     class_list_file_path="./annotations/labels.csv",
+#     corrected_annotations_file_path="active_annotations/corrected.csv",
+# )
+# images_detections = uncertainty_status.get_active_predictions()
+# # images_detections["noisy"] = uncertainty_status.load_uncertainty_states(boxes=images_detections)
+# uncertainty_status.load_uncertainty_states(boxes=images_detections)
+# uncertainty_status.write_states(directory=states_dir)
+# uncertain_detections = images_detections["uncertain"]
+# noisy_detections = images_detections["noisy"]
+#
+# active_status = ActiveStatus(data_loader=data_loader)
+# corrected_annotations = active_status.correct(uncertainty_states=uncertainty_status.tile_states)
+# active_annotations = ActiveStatus.concat_noisy_and_corrected_boxes(corrected_boxes=corrected_annotations, noisy_boxes=noisy_detections)
+# active_states = uncertainty_status.tile_states
+corrected_annotations_path = osp.expanduser("~/Saffron/active_annotations/corrected.csv")
+active_annotations_path = osp.expanduser("~/Saffron/active_annotations/train.csv")
+active = Active(loader=image_loader, states_dir=states_dir, radius=50)
+active.create_active_annotations(
     model=retinanet_model,
-    class_list_file_path="./annotations/labels.csv",
-    corrected_annotations_file_path="active_annotations/corrected.csv",
+    active_annotations_path=active_annotations_path,
+    ground_truth_annotations_path=corrected_annotations_path,
+    ground_truth_loader=data_loader,
+    classes_list_path=csv_classes,
+    budget=100,
 )
-images_detections = uncertainty_status.get_active_predictions()
-# images_detections["noisy"] = uncertainty_status.load_uncertainty_states(boxes=images_detections)
-uncertainty_status.load_uncertainty_states(boxes=images_detections)
-uncertainty_status.write_states(directory=states_dir)
-uncertain_detections = images_detections["uncertain"]
-noisy_detections = images_detections["noisy"]
 
-active_status = ActiveStatus(data_loader=data_loader)
-corrected_annotations = active_status.correct(uncertainty_states=uncertainty_status.tile_states)
-active_annotations = ActiveStatus.concat_noisy_and_corrected_boxes(corrected_boxes=corrected_annotations, noisy_boxes=noisy_detections)
-active_states = uncertainty_status.tile_states
-""""""
-
+active_states = active.states
+uncertain_detections = active.uncertain_predictions
+noisy_detections = active.noisy_predictions
+corrected_annotations = active.ground_truth_annotations
+active_annotations = active.active_annotations
 
 direc = osp.expanduser('~/tmp/saffron_imgs')
-"""
+os.makedirs(direc, exist_ok=True)
+
 for i in range(len(image_loader.image_names)):
     image = cv2.imread(osp.join(image_loader.img_dir, image_loader.image_names[i] + image_loader.ext))
     my_mask = np.ones(shape=image.shape, dtype=np.float64)
@@ -88,7 +107,6 @@ for i in range(len(image_loader.image_names)):
         alpha = annotation[2]
         image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
                           distance_thresh=40, line_thickness=2)
-
 
     for det in image_uncertain_detections:
         x = int(det[1])
@@ -129,17 +147,7 @@ for i in range(len(image_loader.image_names)):
         image = draw_line(image, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True,
                           distance_thresh=40, line_thickness=2)
         cv2.imwrite(osp.join(direc, image_loader.image_names[i] + image_loader.ext), image)
-"""
 
-corrected_annotations_path = osp.expanduser("~/Saffron/active_annotations/corrected.csv")
-active_annotations_path = osp.expanduser("~/Saffron/active_annotations/train.csv")
-active_states_path = osp.expanduser("~/Saffron/active_annotations/states.npy")
-write_corrected_annotations(annotations=corrected_annotations, path=corrected_annotations_path, class_list_path=csv_classes)
-write_active_annotations(annotations=active_annotations, path=active_annotations_path, class_list_path=csv_classes)
-
-fileIO = open(active_states_path, "rb")
-active_states = np.load(fileIO)
-fileIO.close()
 
 data_loader = dataloader.CSVDataset(
     train_file=active_annotations_path,

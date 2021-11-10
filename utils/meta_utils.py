@@ -1,4 +1,6 @@
+import os
 import torch
+from os import path as osp
 
 
 def save_models(model_path: str,
@@ -9,6 +11,8 @@ def save_models(model_path: str,
                 loss=None,
                 mAP=None,
                 epoch=None):
+    os.makedirs(osp.dirname(model_path), exist_ok=True)
+    os.makedirs(osp.dirname(state_dict_path), exist_ok=True)
     state_dict = {"model_state_dict": model.state_dict(), }
     if optimizer is not None:
         state_dict['optimizer_state_dict'] = optimizer.state_dict()

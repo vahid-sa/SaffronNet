@@ -226,7 +226,7 @@ class FocalLoss(nn.Module):
                 os.makedirs(pos_idx_dir, exist_ok=True)
                 FocalLoss.write_positive_indices(regressions=regression, anchors=anchor,
                                                  positive_indices=positive_indices, read_path=img_paths[j],
-                                                 write_dir=pos_idx_dir, annotations=annotations[j])
+                                                 write_dir=pos_idx_dir, annotations=annotations[j], active_states=state)
             # cv2.imwrite(osp.expanduser(f'~/tmp/{np.random.randint(1000)}.jpg'), img)
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
@@ -353,18 +353,31 @@ class FocalLoss(nn.Module):
         cv2.imwrite(write_path, img)
 
     @staticmethod
-    def write_positive_indices(regressions, anchors, annotations, positive_indices, read_path, write_dir):
+    def write_positive_indices(regressions, anchors, annotations, positive_indices, active_states, read_path, write_dir):
         predictions = regressions + anchors
         predictions = predictions[positive_indices]
-        print(f"predictions: {predictions.shape}\nannotations: {annotations.shape}")
         img = cv2.imread(read_path)
+        img = img.astype(np.float64)
+        b, g, r = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+        active_states = np.squeeze(active_states.cpu().detach().numpy())
+        b[active_states] *= 0.5
+        g[active_states] *= 0.5
+        r[active_states] *= 0.5
+        img = img.astype(np.uint8)
         for prediction in predictions:
             x, y, alpha = prediction
             img = draw_line(img, (x, y), alpha, line_color=(255, 255, 0), center_color=(0, 0, 0), half_line=True,
                               distance_thresh=40, line_thickness=2)
         for annotation in annotations:
             x, y, alpha = annotation[:3]
-            img = draw_line(img, (x, y), alpha, line_color=(0, 255, 0), center_color=(0, 0, 0), half_line=True,
+            status = annotation[-1]
+            if status == 1:
+                color = (0, 255, 0)
+            elif status == 0:
+                color = (255, 0, 0)
+            else:
+                color = (0, 255, 255)
+            img = draw_line(img, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True,
                             distance_thresh=40, line_thickness=2)
         write_path = osp.join(write_dir, osp.basename(read_path))
         cv2.imwrite(write_path, img)
