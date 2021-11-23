@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import csv
 import glob
+import json
 from cv2 import cv2
 from os import path as osp
 
@@ -12,7 +13,7 @@ from utils.prediction import detect
 
 
 class Active:
-    def __init__(self, loader, states_dir, radius):
+    def __init__(self, loader, states_dir, radius, image_string_file_numbers_path=None, supervised_annotations_path=None):
         self._NAME, self._X, self._Y, self._ALPHA, self._LABEL, self._SCORE = 0, 1, 2, 3, 4, 5
         self._loader = loader
         self._states_dir = states_dir
@@ -23,6 +24,9 @@ class Active:
         self._noisy_indices = None
         self._gt_annotations = None
         self._active_annotations = None
+        self._write_supervised_data = False if ((image_string_file_numbers_path is None) or (supervised_annotations_path is None)) else True
+        self._supervised_string_file_numbers = Active._load_supervised_string_file_numbers(string_file_number_path=image_string_file_numbers_path) if self._write_supervised_data else None
+        self._supervised_annotations_path = supervised_annotations_path if self._write_supervised_data else None
 
         if osp.isdir(self._states_dir):
             shutil.rmtree(self._states_dir)
@@ -44,8 +48,20 @@ class Active:
             state = np.load(f)
             f.close()
             name = osp.splitext(osp.basename(path))[0]
+            if self._supervised_string_file_numbers is not None:
+                if name in self._supervised_string_file_numbers:
+                    continue  # This state is for supervised data and will be written in a different function in current states dir
             index = self._loader.image_names.index(name)
             self._states[index, :, :] = state
+
+    @staticmethod
+    def _load_supervised_string_file_numbers(string_file_number_path):
+        fileIO = open(string_file_number_path, "r")
+        string = fileIO.read()
+        fileIO.close()
+        dictionary = json.loads(string)
+        supervised_string_file_numbers = dictionary['supervised']
+        return supervised_string_file_numbers
 
     def _predict_boxes(self, model):
         self._boxes = detect(dataset=self._loader, retinanet_model=model)
@@ -117,12 +133,14 @@ class Active:
         uncertain_scores = uncertain_boxes[:, self._SCORE]
         maximum_uncertain_score = np.max(uncertain_scores)
         higher_than_uncertain_score_indices = np.squeeze(np.argwhere(self._boxes[:, self._SCORE] > maximum_uncertain_score))
+        logging.debug(f"states shape: {self._states.shape}")
         for i in higher_than_uncertain_score_indices:
             box = self._boxes[i]
             name, x, y = int(box[self._NAME]), int(box[self._X]), int(box[self._Y])
             position = int(self._loader.image_names.index(f"{name:03d}"))
-            if (not self._states[position, y, x]) and (True in self._states[position, :, :]):
-                indices.append(i)
+            if y < self._states.shape[1] and x < self._states.shape[2]:
+                if (not self._states[position, y, x]) and (True in self._states[position, :, :]):
+                    indices.append(i)
         self._noisy_indices = indices
 
     def _concat_noisy_and_corrected_boxes(self):
@@ -149,6 +167,14 @@ class Active:
             path = osp.join(self._states_dir, name)
             with open(path, "wb") as f:
                 np.save(file=f, arr=states)
+        if self._supervised_string_file_numbers is not None:
+            img_state_shape = self._states[0].shape
+            states = np.full(fill_value=True, dtype=self._states.dtype, shape=img_state_shape)
+            for num in self._supervised_string_file_numbers:
+                name = num + ".npy"
+                path = osp.join(self._states_dir, name)
+                with open(path, "wb") as f:
+                    np.save(file=f, arr=states)
 
     def _write_ground_truth_annotations(self, ground_truth_path, class_list_path):
         IMG, X, Y, ALPHA, LABEL = 0, 1, 2, 3, 4
@@ -169,9 +195,34 @@ class Active:
         os.makedirs(osp.dirname(path), exist_ok=True)
         fileIO = open(path, "w")
         writer = csv.writer(fileIO)
-        _, index_to_class = load_classes(csv_class_list_path=class_list_path)
-        for annotation in self._active_annotations:
-            img_number, x, y, alpha, label, status = annotation[[IMG, X, Y, ALPHA, LABEL, STATUS]].astype(np.int64)
+        class_to_index, index_to_class = load_classes(csv_class_list_path=class_list_path)
+        if len(self._active_annotations) > 0:
+            active_annotations = self._active_annotations[:, [IMG, X, Y, ALPHA, LABEL, STATUS]].astype(np.int64)
+            if self._supervised_annotations_path is not None:
+                supervised_annotations = []
+                file_reader = open(self._supervised_annotations_path, "r")
+                csv_reader = csv.reader(file_reader, delimiter=',')
+                for row in csv_reader:
+                    img_name = int(row[0])
+                    x = int(float(row[1]))
+                    y = int(float(row[2]))
+                    alpha = int(float(row[3]))
+                    label = class_to_index[row[4]]
+                    annotation = [img_name, x, y, 90 - alpha, label, ActiveLabelMode.corrected.value]
+                    supervised_annotations.append(annotation)
+                file_reader.close()
+                supervised_annotations = np.asarray(supervised_annotations, dtype=np.int64)
+                logging.debug(
+                    "active annotations: {0} {1}\nsupervised annotations: {2} {3}".format(
+                        active_annotations.shape, active_annotations.dtype, supervised_annotations.shape, supervised_annotations.dtype,
+                        ),
+                    )
+                active_annotations = np.concatenate([active_annotations, supervised_annotations], axis=0)
+                active_annotations = active_annotations[active_annotations[:, IMG].argsort()]
+        else:
+            active_annotations = self._active_annotations
+        for annotation in active_annotations:
+            img_number, x, y, alpha, label, status = annotation
             img_name = format(img_number, "03d")
             label_name = index_to_class[str(label)]
             if status == ActiveLabelMode.corrected.value:

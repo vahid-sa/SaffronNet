@@ -1,7 +1,7 @@
 from __future__ import print_function
 from retinanet.dataloader import CSVDataset
 import numpy as np
-import cv2 as cv
+from cv2 import cv2 as cv
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import torch

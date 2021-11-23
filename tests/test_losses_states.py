@@ -6,6 +6,7 @@ from cv2 import cv2
 import torch
 import shutil
 import logging
+import json
 from os import path as osp
 from torch._C import import_ir_module
 from torchvision import transforms
@@ -13,9 +14,10 @@ from torch.utils.data import DataLoader
 sys.path.append(osp.abspath("../"))
 sys.path.append(osp.abspath("./"))
 import retinanet
+import debugging_settings
 from retinanet import my_model as model
 from retinanet import dataloader, csv_eval
-from utils.visutils import draw_line
+from utils.visutils import draw_line, Visualizer
 from prediction import imageloader
 from utils.active_tools import Active
 from utils.meta_utils import save_models
@@ -25,7 +27,7 @@ from retinanet.utils import ActiveLabelMode
 logging.basicConfig(level=logging.DEBUG)
 retinanet.settings.NUM_QUERIES = 100
 retinanet.settings.NOISY_THRESH = 0.5
-retinanet.settings.DAMPENING_PARAMETER = 0.5
+# retinanet.settings.DAMPENING_PARAMETER = 0.0
 
 
 class parser:
@@ -41,11 +43,12 @@ class parser:
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
     active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
     save_directory = osp.expanduser("~/tmp/saffron_imgs/")
-    epochs = 3
+    epochs = 50
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/Saffron/weights/active")
-    cycles = 3
+    cycles = 10
     budget = 100
+    supervised_annotations = osp.abspath("./annotations/supervised.csv")
 
     @staticmethod
     def reset():
@@ -75,6 +78,8 @@ class Training:
             corrected_annotations_path,
             active_annotations_path,
             classes_path,
+            supervised_annotations_path=None,
+            filenames_path=None,
             budget=100,
             radius=50,
             epochs=10,
@@ -90,8 +95,10 @@ class Training:
         self._img_dir = images_dir
         self._states_dir = states_dir
         self._image_loader = image_loader
-        self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius)
+        self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=filenames_path, supervised_annotations_path=supervised_annotations_path)
+        # self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=None, supervised_annotations_path=None)
         self._device = "cuda:0" if (use_gpu and torch.cuda.is_available()) else "cpu"
+        self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': []}
 
     def write_predicted_images(self, direc):
         os.makedirs(direc, exist_ok=True)
@@ -200,12 +207,19 @@ class Training:
         # scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         return retinanet, optimizer, scheduler
 
-    def train(self, state_dict_path, models_directory=None, results_directory=None):
+    def train(self, state_dict_path, current_cycle, models_directory=None, results_directory=None):
         train_loader = self._load_training_data(loader_directory=results_directory)
         retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
 
         print("initial evaluation...")
-        mAP = csv_eval.evaluate(self._val_loader, retinanet)
+        if results_directory is None:
+            visualizer = None
+            write_dir = None
+        else:
+            visualizer = Visualizer()
+            write_dir = osp.join(results_directory, "evaluation")
+            os.makedirs(write_dir, exist_ok=True)
+        mAP = csv_eval.evaluate(self._val_loader, retinanet, visualizer=visualizer, write_dir=write_dir)
         mAP = mAP[0][0]
         print(f"initial mAP: {mAP}")
         if models_directory is not None:
@@ -230,6 +244,7 @@ class Training:
         max_mAP = 0.0
 
         for epoch_num in range(self._epochs):
+            debugging_settings.EPOCH_NUM = epoch_num + 1
             retinanet.train()
             retinanet.training = True
             optimizer.zero_grad()
@@ -239,13 +254,15 @@ class Training:
             epoch_XY_REG_loss = []
             epoch_ANGLE_REG_loss = []
             for i, data in enumerate(train_loader):
+                """ save images for models
                 if results_directory is None:
                     results_directory_in_model = None
                 else:
                     results_directory_in_model = osp.join(results_directory, f"epoch_{i:03d}", "model")
                     os.makedirs(results_directory_in_model, exist_ok=True)
-                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), data["aug_img_path"],
-                          results_directory_in_model]
+                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), data["aug_img_path"], results_directory_in_model]
+                """
+                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
                 classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(params)
 
                 classification_loss = classification_loss.mean()
@@ -271,19 +288,34 @@ class Training:
                     )
                 )
 
-                classification_loss = classification_loss.mean()
-                xydistance_regression_loss = xydistance_regression_loss.mean()
-                angle_distance_regression_losses = angle_distance_regression_losses.mean()
-                loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
+                # classification_loss = classification_loss.mean()
+                # xydistance_regression_loss = xydistance_regression_loss.mean()
+                # angle_distance_regression_losses = angle_distance_regression_losses.mean()
+                # loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
 
                 del classification_loss
                 del xydistance_regression_loss
                 del angle_distance_regression_losses
 
-            mAP = csv_eval.evaluate(self._val_loader, retinanet)
+            if results_directory is None:
+                visualizer = None
+                write_dir = None
+            else:
+                visualizer = Visualizer()
+                write_dir = osp.join(results_directory, "evaluation")
+                os.makedirs(write_dir, exist_ok=True)
+            mAP = csv_eval.evaluate(self._val_loader, retinanet, visualizer=visualizer, write_dir=write_dir)
             mAP = mAP[0][0]
             mean_epoch_loss = np.mean(epoch_loss)
             print(f"epoch loss: {mean_epoch_loss}, epoch mAP: {mAP}")
+            self._metrics['cycle'].append(current_cycle)
+            self._metrics['epoch'].append(epoch_num)
+            self._metrics['mAP'].append(mAP)
+            self._metrics['loss'].append(mean_epoch_loss)
+            self._metrics['lr'].append(optimizer.param_groups[0]['lr'])
+            metrics = json.dumps(self._metrics)
+            with open(osp.join(osp.dirname(results_directory), "metrics.json"), "w") as f:
+                f.write(metrics)
             if mean_epoch_loss < min_loss:
                 min_loss = mean_epoch_loss
                 print("Minimum loss")
@@ -310,6 +342,7 @@ class Training:
 
     def run_cycle(self, cycles, init_state_dict_path, models_directory, results_dir):
         for i in range(1, cycles+1):
+            debugging_settings.CYCLE_NUM = i
             print(f"Cycle: {i}")
             state_dict_path = init_state_dict_path if (i == 1) else osp.join(models_directory, f"cycle_{i - 1:02d}","best_mAP_state_dict.pt")
             retinanet, _, _ = self._load_model(state_dict_path=state_dict_path, num_classes=1)
@@ -317,12 +350,13 @@ class Training:
             retinanet.eval()
             retinanet.training = False
             self.create_annotations(model=retinanet)
-            print("Writing created annotaations images")
+            print("Writing created annotations images")
             results_directory = osp.join(results_dir, f"cycle_{i:02d}")
+            debugging_settings.CLASSIFICATION_SCORES_PATH = osp.join(results_dir, "classification_scores")
             os.mkdir(results_directory)
-            self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
+            # self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
             print("training...")
-            self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), results_directory=results_directory)
+            self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), results_directory=results_directory, current_cycle=i)
 
 
 def main():
@@ -367,6 +401,8 @@ def main():
         classes_path=parser.csv_classes,
         epochs=parser.epochs,
         budget=parser.budget,
+        supervised_annotations_path=parser.supervised_annotations,
+        filenames_path=parser.filenames,
     )
     trainer.run_cycle(cycles=parser.cycles, init_state_dict_path=parser.state_dict_path, models_directory=parser.save_models_directory, results_dir=parser.save_directory)
 

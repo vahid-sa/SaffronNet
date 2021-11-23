@@ -276,3 +276,5 @@ plots/history.json
 tests/test_augmentation.py
 tests/test.py
 dataset/
+test2.py
+test3.py

@@ -1,5 +1,6 @@
 import os
-
+import logging
+import json
 import numpy as np
 from cv2 import cv2
 import torch
@@ -9,6 +10,7 @@ from os import path as osp
 from sklearn import preprocessing
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
+import debugging_settings
 from utils.visutils import draw_line
 
 
@@ -37,20 +39,11 @@ def distance(ax, bx, large_matrix: bool = False):
     -------
     (N, K) ndarray of distance between all x in ax, bx
     """
-    gc.collect()
-    torch.cuda.empty_cache()
     ax_prepared, bx_prepared = prepare(ax, bx)
+    dist = torch.abs(ax_prepared - bx_prepared)
+    # absolute(tensor=dist, large_matrix=large_matrix)
 
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    dist = ax_prepared - bx_prepared
-    del ax_prepared, bx_prepared
-    gc.collect()
-    torch.cuda.empty_cache()
-    absolute(tensor=dist, large_matrix=large_matrix)
     return dist
-
 
 def calc_distance(a, b):
     ax = a[:, 0]
@@ -78,7 +71,6 @@ class FocalLoss(nn.Module):
     # def __init__(self):
 
     def forward(self, classifications, regressions, anchors, annotations, states, img_paths, write_directory=None):
-        # print(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
         alpha = 0.95
         gamma = 2.0
         predictions = torch.add(anchors, regressions)
@@ -86,7 +78,6 @@ class FocalLoss(nn.Module):
         classification_losses = []
         xydistance_regression_losses = []
         angle_distance_regression_losses = []
-
         anchor = anchors[0, :, :]
 
         anchor_ctr_x = anchor[:, 0]
@@ -98,6 +89,9 @@ class FocalLoss(nn.Module):
             gc.collect()
             torch.cuda.empty_cache()
             classification = classifications[j, :, :]
+            with open(debugging_settings.CLASSIFICATION_SCORES_PATH, "a") as f:
+                hist, _ = np.histogram(classification.detach().cpu().numpy(), bins=10, range=(0.0, 1.0))
+                f.write(json.dumps({"cycle": debugging_settings.CYCLE_NUM, "epoch": debugging_settings.EPOCH_NUM, "scores": hist.tolist()}))
             regression = regressions[j, :, :]
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
@@ -106,13 +100,13 @@ class FocalLoss(nn.Module):
             state = states[j, :, :, :]
             prediction = predictions[j, :, :]
             gt_map = FocalLoss.set_noisy_anchors(state=state, anchor=anchor)
-            img = torch.zeros(size=(state.shape[:2]), dtype=torch.uint8)
+            # img = torch.zeros(size=(state.shape[:2]), dtype=torch.uint8)
             true_indices = anchor[gt_map].to(dtype=torch.int64, device='cpu')
             true_indices = true_indices[:, [1, 0]]
             true_indices = true_indices.t()
             true_indices = tuple(true_indices.tolist())
-            img[true_indices] = 255
-            img = img.numpy()
+            # img[true_indices] = 255
+            # img = img.numpy()
             if center_alpha_annotation.shape[0] == 0:
                 if torch.cuda.is_available():
                     alpha_factor = torch.ones(
@@ -189,13 +183,13 @@ class FocalLoss(nn.Module):
                     assigned_annotations[:, 3].long()] = 1
 
             # -------------------------------------------------------------------------
-            dampening_factor = FocalLoss.get_dampening_factor(
-                annotations=annotations,
-                targets=targets,
-                positive_indices=positive_indices,
-                background_positive_indices=background_positive_indices,
-                min_distances_args=dxy_argmin,
-            )
+            # dampening_factor = FocalLoss.get_dampening_factor(
+            #     annotations=annotations,
+            #     targets=targets,
+            #     positive_indices=positive_indices,
+            #     background_positive_indices=background_positive_indices,
+            #     min_distances_args=dxy_argmin,
+            # )
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
             else:
@@ -218,8 +212,10 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
+            logging.debug(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
             dampening_factor = torch.where(gt_map, 1.0, retinanet.settings.DAMPENING_PARAMETER)
             cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
+            """ writing images with positive indices drawn on
             if (write_directory is not None) and (img_paths is not None):
                 # FocalLoss.write_img_loss(read_path=img_paths[j], cls_loss=cls_loss, anchors_like=anchor, write_dir=write_directory)
                 pos_idx_dir = osp.join(write_directory, "positive_indices")
@@ -227,6 +223,7 @@ class FocalLoss(nn.Module):
                 FocalLoss.write_positive_indices(regressions=regression, anchors=anchor,
                                                  positive_indices=positive_indices, read_path=img_paths[j],
                                                  write_dir=pos_idx_dir, annotations=annotations[j], active_states=state)
+            """
             # cv2.imwrite(osp.expanduser(f'~/tmp/{np.random.randint(1000)}.jpg'), img)
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))

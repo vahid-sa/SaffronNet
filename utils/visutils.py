@@ -1,9 +1,11 @@
 from argparse import RawDescriptionHelpFormatter
 import math
 from enum import Enum
-import cv2 as cv
 import numpy as np
+import logging
 from typing import Tuple
+from cv2 import cv2 as cv
+from os import path as osp
 from retinanet.settings import ACC, DEC, RAW
 POINT = Tuple[float, float]
 COLOR = Tuple[int, int, int]
@@ -189,3 +191,28 @@ def get_alpha(x0, y0, x1, y1):
 
     alpha = (np.arctan2(y, x) / math.pi) * 180
     return normalize_alpha(alpha)
+
+class Visualizer:
+    def __init__(self):
+        pass
+
+    def __call__(
+        self,
+        image: np.ndarray,
+        image_name: int,
+        accepted_predictions: list,
+        declined_predictions: list,
+        annotations: list,
+        write_dir: str,
+    ):
+        for ann in annotations:
+            x, y, alpha = int(ann[0]), int(ann[1]), int(ann[2])
+            image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+        for det in declined_predictions:
+            x, y, alpha, score = det.astype(np.int64)
+            image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+        for det in accepted_predictions:
+            x, y, alpha, score = det.astype(np.int64)
+            image = draw_line(image, (x, y), alpha, line_color=(0, 255, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+        path = osp.join(write_dir, f"{image_name:03d}.jpg")
+        cv.imwrite(path, image)
