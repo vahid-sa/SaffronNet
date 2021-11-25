@@ -12,17 +12,20 @@ f.close()
 metrics = json.loads(string)
 maps = metrics['mAP']
 losses = metrics["loss"]
+lrs = metrics['lr']
 cycles = np.unique(metrics['cycle'])
 epochs = np.unique(metrics['epoch'])
 cycles = cycles - 1 if min(cycles) > 0 else cycles
-fig, axs = plt.subplots(1, 2, figsize=(12, 4))
+fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 axs[0].plot(np.arange(len(maps)), maps, color='green')
 axs[0].title.set_text("mAP")
 axs[1].plot(np.arange(len(losses)), losses, color='red')
 axs[1].title.set_text("loss")
+axs[2].plot(np.arange(len(lrs)), lrs, color='blue')
 for cyl in cycles:
     axs[0].axvline(cyl * len(epochs))
     axs[1].axvline(cyl * len(epochs))
+    axs[2].axvline(cyl * len(epochs))
 fig.suptitle("metrics")
 fig.show()
 plt.show()

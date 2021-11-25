@@ -1,455 +1,409 @@
-import numpy as np
-import torch
-import torchvision
-import csv
-import os
-from os import path as osp
-import argparse
-from typing import Tuple
 from math import inf
-import torch.optim as optim
-from torchvision import transforms
+import sys
+import os
+import numpy as np
+from cv2 import cv2
+import torch
 import shutil
-import gc
-import retinanet.utils
-from retinanet import model
-from retinanet.dataloader import CSVDataset, collater, Resizer, AspectRatioBasedSampler, Augmenter, Normalizer
+import logging
+import json
+from os import path as osp
+from torch._C import import_ir_module
+from torchvision import transforms
 from torch.utils.data import DataLoader
-from retinanet import csv_eval
-from utils.log_utils import log_history
-from prediction import imageloader, predict_boxes
-import labeling
-from retinanet import utils
-from utils.meta_utils import save_models
-from retinanet.settings import NAME, X, Y, ALPHA, LABEL
 import retinanet
-from visualize import draw_correct_noisy
+import debugging_settings
+from retinanet import model
+from retinanet import dataloader, csv_eval
+from utils.visutils import draw_line, Visualizer
+from prediction import imageloader
+from utils.active_tools import Active
+from utils.meta_utils import save_models
+from retinanet.utils import ActiveLabelMode
+
+
+logging.basicConfig(level=logging.DEBUG)
+retinanet.settings.NUM_QUERIES = 100
+retinanet.settings.NOISY_THRESH = 0.5
+# retinanet.settings.DAMPENING_PARAMETER = 0.0
+
+
+class parser:
+    ground_truth_annotations = osp.abspath("annotations/unsupervised.csv")
+    csv_classes = osp.abspath("annotations/labels.csv")
+    images_dir = osp.expanduser("~/Saffron/dataset/Train/")
+    corrected_annotations = osp.expanduser("~/Saffron/active_annotations/corrected.csv")
+    filenames = osp.abspath("annotations/filenames.json")
+    partition = "unsupervised"
+    ext = ".jpg"
+    model_path = osp.expanduser('~/Saffron/weights/supervised/init_model.pt')
+    state_dict_path = osp.expanduser('~/Saffron/init_fully_trained_weights/init_state_dict.pt')
+    states_dir = osp.expanduser("~/Saffron/active_annotations/states")
+    active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
+    save_directory = osp.expanduser("~/tmp/saffron_imgs/")
+    epochs = 2
+    csv_val = osp.abspath("./annotations/validation.csv")
+    save_models_directory = osp.expanduser("~/Saffron/weights/active")
+    cycles = 3
+    budget = 100
+    supervised_annotations = osp.abspath("./annotations/supervised.csv")
+
+    @staticmethod
+    def reset():
+        if osp.isfile(parser.corrected_annotations):
+            os.remove(parser.corrected_annotations)
+        if osp.isfile(parser.active_annotations):
+            os.remove(parser.active_annotations)
+        if osp.isdir(parser.states_dir):
+            shutil.rmtree(parser.states_dir)
+        os.makedirs(parser.states_dir, exist_ok=False)
+        if osp.isdir(parser.save_directory):
+            shutil.rmtree(parser.save_directory)
+        os.makedirs(parser.save_directory, exist_ok=False)
+        if osp.isdir(parser.save_models_directory):
+            shutil.rmtree(parser.save_models_directory)
+        os.makedirs(parser.save_models_directory, exist_ok=False)
 
 
 class Training:
-    def __init__(self, args):
-        if not osp.isdir("./active_annotations/"):
-            os.mkdir("./active_annotations/")
-        self.supervised_file = "./annotations/supervised.csv"
-        self.unsupervised_file = "./annotations/unsupervised.csv"
-        self.validation_file = "annotations/validation.csv"
-        self.class_list_file = "annotations/labels.csv"
-        self.corrected_annotations_file = "active_annotations/corrected.csv"
-        self.train_file = "active_annotations/train.csv"
-        self.class_to_index, self.index_to_class = utils.load_classes(csv_class_list_path=self.class_list_file)
-        self.model_path_pattern, self.state_dict_path_pattern = Training.get_model_saving_pattern(
-            saving_model_dir=args.save_dir
-        )
-
-        self.loader = imageloader.CSVDataset(
-            filenames_path="annotations/filenames.json",
-            partition="unsupervised",
-            class_list=self.class_list_file,
-            images_dir=args.image_dir,
-            image_extension=args.ext,
-            transform=torchvision.transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
-        )
-
-        self.dataset_val = CSVDataset(
-            train_file=self.validation_file,
-            class_list=self.class_list_file,
-            transform=transforms.Compose([Normalizer(), Resizer()]),
-            images_dir=args.image_dir,
-            image_extension=args.ext,
-        )
-
-        self.args = args
-        self.cycle_number: int
-
-
-    @staticmethod
-    def get_model_saving_pattern(saving_model_dir: str) -> Tuple[str, str]:
-        model_dir = osp.join(osp.expanduser(osp.expandvars(osp.abspath(saving_model_dir))), "model")
-        state_dict_dir = osp.join(osp.expanduser(osp.expandvars(osp.abspath(saving_model_dir))), "state_dict")
-        if osp.isdir(model_dir):
-            shutil.rmtree(model_dir)
-        if osp.isdir(state_dict_dir):
-            shutil.rmtree(state_dict_dir)
-        os.makedirs(model_dir, exist_ok=False)
-        os.makedirs(state_dict_dir, exist_ok=False)
-        model_path_pattern = osp.join(model_dir, "{0}.pt")
-        state_dict_path_pattern = osp.join(state_dict_dir, "{0}.pt")
-        return model_path_pattern, state_dict_path_pattern
-
-    def load_annotations(self, path: str) -> np.array:
-        assert osp.isfile(path), "File does not exist."
-        boxes = list()
-        fileIO = open(path, "r")
-        reader = csv.reader(fileIO, delimiter=",")
-        for row in reader:
-            if row[X] == row[Y] == row[ALPHA] == row[LABEL] == "":
-                continue
-            box = [None, None, None, None, None]
-            box[NAME] = float(row[NAME])
-            box[X] = float(row[X])
-            box[Y] = float(row[Y])
-            box[ALPHA] = float(row[ALPHA])
-            box[LABEL] = float(self.class_to_index[row[LABEL]])
-            boxes.append(box)
-        fileIO.close()
-        boxes = np.asarray(boxes, dtype=np.float64)
-        return np.asarray(boxes[:, [NAME, X, Y, ALPHA, LABEL]], dtype=np.float64)
-
-    @staticmethod
-    def detect(dataset, retinanet_model):
-        """ Get the detections from the retinanet using the generator.
-        The result is a list of lists such that the size is:
-            all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
-        # Arguments
-            dataset         : The generator used to run images through the retinanet.
-            retinanet           : The retinanet to run on the images.
-        # Returns
-            A list of lists containing the detections for each image in the generator.
-        """
-        all_detections = list()
-
-        retinanet_model.eval()
-
-        print("detecting")
-        with torch.no_grad():
-
-            for index in range(len(dataset)):
-                data = dataset[index]
-                scale = data['scale']
-                img_name = float(int(data["name"]))
-
-                # run network
-                if torch.cuda.is_available():
-                    scores, labels, boxes = retinanet_model(data['img'].permute(
-                        2, 0, 1).cuda().float().unsqueeze(dim=0))
-                else:
-                    scores, labels, boxes = retinanet_model(
-                        data['img'].permute(2, 0, 1).float().unsqueeze(dim=0))
-                scores = scores.cpu().numpy()
-                labels = labels.cpu().numpy()
-                boxes = boxes.cpu().numpy()
-                if boxes.shape[0] == 0:
-                    continue
-                # correct boxes for image scale
-                boxes /= scale
-
-                # select detections
-                image_boxes = boxes
-                image_scores = scores
-                image_labels = labels
-                img_name_col = np.full(shape=(len(image_scores), 1), fill_value=img_name, dtype=np.int32)
-                image_detections = np.concatenate([img_name_col, image_boxes, np.expand_dims(image_labels, axis=1),
-                                                   np.expand_dims(image_scores, axis=1)], axis=1)
-                all_detections.extend(image_detections.tolist())
-                print('\rimage {0:02d}/{1:02d}'.format(index + 1, len(dataset)), end='')
-        print()
-        return np.asarray(all_detections, dtype=np.float64)
-
-    def get_corrected_and_active_boxes(
+    def __init__(
             self,
-            trained_model: model,
-    ) -> Tuple[np.array, np.array]:
-        groundtruth_annotations_path = self.unsupervised_file
-        pred_boxes = Training.detect(dataset=self.loader, retinanet_model=trained_model)
-        previous_corrected_annotations = None
-        if osp.isfile(self.corrected_annotations_file):
-            previous_corrected_annotations = self.load_annotations(self.corrected_annotations_file)
-            previous_corrected_names = previous_corrected_annotations[:, NAME]
-        else:
-            previous_corrected_names = np.array(list(), dtype=pred_boxes.dtype)
-        uncertain_boxes, noisy_boxes = predict_boxes.split_uncertain_and_noisy(
-            boxes=pred_boxes,
-            previous_corrected_boxes_names=previous_corrected_names,
+            image_loader,
+            gt_loader,
+            val_loader,
+            states_dir,
+            images_dir,
+            corrected_annotations_path,
+            active_annotations_path,
+            classes_path,
+            supervised_annotations_path=None,
+            filenames_path=None,
+            budget=100,
+            radius=50,
+            epochs=10,
+            use_gpu=True,
+    ):
+        self._gt_loader = gt_loader
+        self._val_loader = val_loader
+        self._corrected_annotations_path = corrected_annotations_path
+        self._active_annotations_path = active_annotations_path
+        self._classes_path = classes_path
+        self._budget = budget
+        self._epochs = epochs
+        self._img_dir = images_dir
+        self._states_dir = states_dir
+        self._image_loader = image_loader
+        self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=filenames_path, supervised_annotations_path=supervised_annotations_path)
+        # self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=None, supervised_annotations_path=None)
+        self._device = "cuda:0" if (use_gpu and torch.cuda.is_available()) else "cpu"
+        self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': []}
+
+    def write_predicted_images(self, direc):
+        os.makedirs(direc, exist_ok=True)
+        active_states = self._active.states
+        uncertain_detections = self._active.uncertain_predictions
+        noisy_detections = self._active.noisy_predictions
+        corrected_annotations = self._active.ground_truth_annotations
+        active_annotations = self._active.active_annotations
+        for i in range(len(self._image_loader.image_names)):
+            image = cv2.imread(osp.join(self._image_loader.img_dir, self._image_loader.image_names[i] + self._image_loader.ext))
+            my_mask = np.ones(shape=image.shape, dtype=np.float64)
+            mask = active_states[i]
+            my_mask[mask] *= 0.5
+            image = image.astype(np.float64) * my_mask
+            image = image.astype(np.uint8)
+            image_noisy_detections = noisy_detections[noisy_detections[:, 0] == int(self._image_loader.image_names[i])]
+            image_uncertain_detections = uncertain_detections[uncertain_detections[:, 0] == int(self._image_loader.image_names[i])]
+            image_active_annotations = active_annotations[active_annotations[:, 0] == int(self._image_loader.image_names[i])]
+            image_corrected_annotations = corrected_annotations[corrected_annotations[:, 0] == int(self._image_loader.image_names[i])]
+            ground_truth_annotations = self._gt_loader[i]['annot'].detach().cpu().numpy()
+            for annotation in ground_truth_annotations:
+                x = annotation[0]
+                y = annotation[1]
+                alpha = annotation[2]
+                image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
+                                distance_thresh=40, line_thickness=2)
+
+            for det in image_uncertain_detections:
+                x = int(det[1])
+                y = int(det[2])
+                alpha = det[3]
+                score = det[5]
+                image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+                cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+
+            for det in image_noisy_detections:
+                x = int(det[1])
+                y = int(det[2])
+                alpha = det[3]
+                score = det[5]
+                image = draw_line(image, (x, y), alpha, line_color=(0, 255, 255), center_color=(0, 0, 0), half_line=True,
+                                distance_thresh=40, line_thickness=2)
+                cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 255, 255), 2)
+
+            for annot in image_corrected_annotations:
+                x = int(annot[1])
+                y = int(annot[2])
+                alpha = annot[3]
+                score = annot[5]
+                image = draw_line(image, (x, y), alpha, line_color=(255, 255, 0), center_color=(0, 0, 0), half_line=True,
+                                distance_thresh=40, line_thickness=2)
+
+            for annot in image_active_annotations:
+                x = int(annot[1])
+                y = int(annot[2])
+                alpha = annot[3]
+                status = annot[-1]
+                if status == ActiveLabelMode.corrected.value:
+                    color = (0, 255, 0)
+                elif status == ActiveLabelMode.noisy.value:
+                    color = (255, 0, 0)
+                else:
+                    color = (0, 0, 0)
+                image = draw_line(image, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True,
+                                distance_thresh=40, line_thickness=2)
+                cv2.imwrite(osp.join(direc, self._image_loader.image_names[i] + self._image_loader.ext), image)
+
+    def create_annotations(self, model):
+        self._active.create_active_annotations(
+            model=model,
+            budget=self._budget,
+            ground_truth_loader=self._gt_loader,
+            ground_truth_annotations_path=self._corrected_annotations_path,
+            active_annotations_path=self._active_annotations_path,
+            classes_list_path=self._classes_path,
         )
 
-        ground_truth_annotations = self.load_annotations(groundtruth_annotations_path)
-        current_corrected_boxes = labeling.label(all_gts=ground_truth_annotations, all_uncertain_preds=uncertain_boxes)
-        if previous_corrected_annotations is not None:
-            corrected_boxes = np.concatenate([previous_corrected_annotations, current_corrected_boxes], axis=0)
-            box_pose = corrected_boxes[:, [1, 2]].astype(np.int64)
-            _, unique_indices = np.unique(box_pose, return_index=True, axis=0)
-            corrected_boxes = corrected_boxes[unique_indices, :]
-        else:
-            corrected_boxes = current_corrected_boxes
-
-        corrected_mode = np.full(shape=(corrected_boxes.shape[0], 1),
-                                 fill_value=retinanet.utils.ActiveLabelMode.corrected.value,
-                                 dtype=corrected_boxes.dtype)
-        noisy_mode = np.full(shape=(noisy_boxes.shape[0], 1), fill_value=retinanet.utils.ActiveLabelMode.noisy.value,
-                             dtype=noisy_boxes.dtype)
-        corrected_boxes = np.concatenate([corrected_boxes[:, [NAME, X, Y, ALPHA, LABEL]], corrected_mode], axis=1)
-        noisy_boxes = np.concatenate([noisy_boxes[:, [NAME, X, Y, ALPHA, LABEL]], noisy_mode], axis=1)
-        active_boxes = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
-        active_boxes = active_boxes[active_boxes[:, NAME].argsort()]
-        save_images_dir = osp.join(self.args.image_save_dir, str(self.cycle_number))
-        if osp.isdir(save_images_dir):
-            shutil.rmtree(save_images_dir)
-        os.makedirs(save_images_dir, exist_ok=False)
-        draw_correct_noisy(
-            loader=self.loader,
-            detections=active_boxes,
-            output_dir=save_images_dir,
-            images_dir=self.args.image_dir,
+    def _load_training_data(self, loader_directory):
+        dataset_train = dataloader.CSVDataset(
+            train_file=self._active_annotations_path,
+            class_list=self._classes_path,
+            images_dir=self._img_dir,
+            ground_truth_states_directory=self._states_dir,
+            transform=transforms.Compose([dataloader.Normalizer(), dataloader.Augmenter(), dataloader.Resizer()]),
+            save_output_img_directory=loader_directory,
         )
-        return corrected_boxes, active_boxes
 
-    def train(self, checkpoint, save_model_path, save_state_dict_path):
-        max_mAp = 0
-        min_loss = inf
-
-        dataset_train = CSVDataset(
-            train_file=self.train_file,
-            class_list=self.class_list_file,
-            transform=transforms.Compose([Normalizer(), Augmenter(), Resizer()]),
-            images_dir=self.args.image_dir,
-            image_extension=self.args.ext,
-        )
-        sampler = AspectRatioBasedSampler(
+        sampler = dataloader.AspectRatioBasedSampler(
             dataset_train, batch_size=1, drop_last=False)
-        dataloader_train = DataLoader(
-            dataset_train, num_workers=3, collate_fn=collater, batch_sampler=sampler)
+        train_loader = DataLoader(
+            dataset_train, num_workers=2, collate_fn=dataloader.collater, batch_sampler=sampler)
+        return train_loader
 
-        # Create the model
-        if self.args.model_type == 'resnet':
-            # Create the model
-            if self.args.depth == 18:
-                retinanet_model = model.resnet18(
-                    num_classes=dataset_train.num_classes(), pretrained=True)
-            elif self.args.depth == 34:
-                retinanet_model = model.resnet34(
-                    num_classes=dataset_train.num_classes(), pretrained=True)
-            elif self.args.depth == 50:
-                retinanet_model = model.resnet50(
-                    num_classes=dataset_train.num_classes(), pretrained=True)
-            elif self.args.depth == 101:
-                retinanet_model = model.resnet101(
-                    num_classes=dataset_train.num_classes(), pretrained=True)
-            elif self.args.depth == 152:
-                retinanet_model = model.resnet152(
-                    num_classes=dataset_train.num_classes(), pretrained=True)
-            else:
-                raise ValueError(
-                    'Unsupported model depth, must be one of 18, 34, 50, 101, 152')
+    def _load_model(self, state_dict_path, num_classes, learning_rate=1e-5):
+        retinanet = model.vgg7(num_classes=num_classes, pretrained=True)
+        retinanet = retinanet.to(device=self._device)
+        retinanet = torch.nn.DataParallel(retinanet)
+        retinanet = retinanet.to(device=self._device)
 
-        elif self.args.model_type == 'vgg':
-            retinanet_model = model.vgg7(
-                num_classes=dataset_train.num_classes(), pretrained=True)
+        optimizer = torch.optim.Adam(retinanet.parameters(), lr=learning_rate)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
+
+        checkpoint = torch.load(state_dict_path)
+        retinanet.load_state_dict(checkpoint['model_state_dict'])
+        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        return retinanet, optimizer, scheduler
+
+    def train(self, state_dict_path, current_cycle, models_directory=None, results_directory=None):
+        train_loader = self._load_training_data(loader_directory=results_directory)
+        retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
+
+        print("initial evaluation...")
+        if results_directory is None:
+            visualizer = None
+            write_dir = None
         else:
-            raise ValueError(
-                "Unsupported model type, must be one of 'resnet' or 'vgg'")
+            visualizer = Visualizer()
+            write_dir = osp.join(results_directory, "evaluation")
+            os.makedirs(write_dir, exist_ok=True)
+        mAP = csv_eval.evaluate(self._val_loader, retinanet, visualizer=visualizer, write_dir=write_dir)
+        mAP = mAP[0][0]
+        print(f"initial mAP: {mAP}")
+        if models_directory is not None:
+            save_models(
+                model_path=osp.join(models_directory, "best_loss_model.pt"),
+                state_dict_path=osp.join(models_directory, "best_loss_state_dict.pt"),
+                model=retinanet,
+                optimizer=optimizer,
+                scheduler=scheduler,
+            )
+        max_mAP = mAP
+        if models_directory is not None:
+            save_models(
+                model_path=osp.join(models_directory, "best_mAP_model.pt"),
+                state_dict_path=osp.join(models_directory, "best_mAP_state_dict.pt"),
+                model=retinanet,
+                optimizer=optimizer,
+                scheduler=scheduler,
+            )
 
-        if torch.cuda.is_available():
-            retinanet_model = torch.nn.DataParallel(retinanet_model.cuda()).cuda()
-        else:
-            retinanet_model = torch.nn.DataParallel(retinanet_model)
+        min_loss = inf
+        max_mAP = 0.0
 
-        optimizer = optim.Adam(retinanet_model.parameters(), lr=1e-5)
-
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=3, verbose=True)
-        # checkpoint = torch.load(previous_state_dict_path)
-        retinanet_model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-
-        retinanet_model.train()
-        if self.args.model_type == "resnet":
-            retinanet_model.module.freeze_bn()
-
-        print('Num training images: {}'.format(len(dataset_train)))
-        loss_hist = []
-        init_mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
-        print("init_mAP", init_mAP)
-        del init_mAP
-
-        for epoch_num in range(self.args.epochs):
-            gc.collect()
-            torch.cuda.empty_cache()
-            retinanet_model.train()
-            if self.args.model_type == "resnet":
-                retinanet_model.module.freeze_bn()
-
+        for epoch_num in range(self._epochs):
+            debugging_settings.EPOCH_NUM = epoch_num + 1
+            retinanet.train()
+            retinanet.training = True
+            optimizer.zero_grad()
+            loss_hist = []
             epoch_loss = []
             epoch_CLASSIFICATION_loss = []
             epoch_XY_REG_loss = []
             epoch_ANGLE_REG_loss = []
+            for i, data in enumerate(train_loader):
+                """ save images for models
+                if results_directory is None:
+                    results_directory_in_model = None
+                else:
+                    results_directory_in_model = osp.join(results_directory, f"epoch_{i:03d}", "model")
+                    os.makedirs(results_directory_in_model, exist_ok=True)
+                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), data["aug_img_path"], results_directory_in_model]
+                """
+                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
+                classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(params)
 
-            for iter_num, data in enumerate(dataloader_train):
-                gc.collect()
-                torch.cuda.empty_cache()
-                try:
-                    optimizer.zero_grad()
-                    if torch.cuda.is_available():
-                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
-                            [data['img'].cuda().float(), data['annot']])
-                    else:
-                        classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet_model(
-                            [data['img'].float(), data['annot']])
-                    classification_loss = classification_loss.mean()
-                    xydistance_regression_loss = xydistance_regression_loss.mean()
-                    angle_distance_regression_losses = angle_distance_regression_losses.mean()
-
-                    loss = classification_loss + xydistance_regression_loss + \
-                           angle_distance_regression_losses
-
-                    if bool(loss == 0):
-                        continue
-
-                    loss.backward()
-
-                    torch.nn.utils.clip_grad_norm_(retinanet_model.parameters(), 0.1)
-
-                    optimizer.step()
-
-                    loss_hist.append(float(loss))
-
-                    epoch_loss.append(float(loss))
-                    epoch_CLASSIFICATION_loss.append(float(classification_loss))
-                    epoch_XY_REG_loss.append(float(xydistance_regression_loss))
-                    epoch_ANGLE_REG_loss.append(
-                        float(angle_distance_regression_losses))
-                    print(
-                        'Cycle: {} | Epoch: {} | Iteration: {} | Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
-                            self.cycle_number,
-                            epoch_num,
-                            iter_num,
-                            float(classification_loss),
-                            float(xydistance_regression_loss),
-                            float(angle_distance_regression_losses), loss))
-
-                    del classification_loss
-                    del xydistance_regression_loss
-                    del angle_distance_regression_losses
-
-                except Exception as e:
-                    print(e)
+                classification_loss = classification_loss.mean()
+                xydistance_regression_loss = xydistance_regression_loss.mean()
+                angle_distance_regression_losses = angle_distance_regression_losses.mean()
+                loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
+                if loss == 0:
                     continue
-
-            mean_epoch_loss = np.mean(epoch_loss)
-            print('Evaluating dataset')
-            if min_loss > mean_epoch_loss:
-                print("loss improved from {} to {}".format(min_loss, mean_epoch_loss))
-                min_loss = mean_epoch_loss
-
-                # save_models(
-                #     model_path=save_model_path,
-                #     state_dict_path=save_state_dict_path,
-                #     model=retinanet_model,
-                #     optimizer=optimizer,
-                #     scheduler=scheduler,
-                #     loss=np.mean(epoch_loss),
-                #     mAP=-1,
-                #     epoch=epoch_num,
-                # )
-
-            mAP = csv_eval.evaluate(self.dataset_val, retinanet_model)
-            if mAP[0][0] > max_mAp:
-                print('mAp improved from {} to {}'.format(max_mAp, mAP[0][0]))
-                max_mAp = mAP[0][0]
-
-                save_models(
-                    model_path=save_model_path,
-                    state_dict_path=save_state_dict_path,
-                    model=retinanet_model,
-                    optimizer=optimizer,
-                    scheduler=scheduler,
-                    loss=np.mean(epoch_loss),
-                    mAP=max_mAp,
-                    epoch=epoch_num,
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
+                optimizer.step()
+                loss_hist.append(float(loss))
+                epoch_loss.append(float(loss))
+                epoch_CLASSIFICATION_loss.append(float(classification_loss))
+                epoch_XY_REG_loss.append(float(xydistance_regression_loss))
+                epoch_ANGLE_REG_loss.append(float(angle_distance_regression_losses))
+                print(
+                    'Classification loss: {:1.5f} | XY Regression loss: {:1.5f} | Angle Regression loss: {:1.5f}| Running loss: {:1.5f}'.format(
+                        float(classification_loss),
+                        float(xydistance_regression_loss),
+                        float(angle_distance_regression_losses),
+                        loss,
+                    )
                 )
 
-            log_history(epoch_num,
-                        {'c-loss': np.mean(epoch_CLASSIFICATION_loss),
-                         'rxy-loss': np.mean(epoch_XY_REG_loss),
-                         'ra-loss': np.mean(epoch_ANGLE_REG_loss),
-                         'mAp': mAP},
-                        os.path.join(os.path.dirname(self.args.save_dir), 'history.json'))
-            scheduler.step(np.mean(epoch_loss))
+                # classification_loss = classification_loss.mean()
+                # xydistance_regression_loss = xydistance_regression_loss.mean()
+                # angle_distance_regression_losses = angle_distance_regression_losses.mean()
+                # loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
 
-        retinanet_model.eval()
-        if self.args.save_dir:
-            torch.save(retinanet_model, os.path.join(self.args.save_dir, 'model_final.pt'))
-        else:
-            torch.save(retinanet_model, 'model_final.pt')
+                del classification_loss
+                del xydistance_regression_loss
+                del angle_distance_regression_losses
 
-    def manage_cycles(self):
-
-        for i in range(1, self.args.num_cycles + 1):
-            self.cycle_number = i
-            if i == 1:
-                model_path = self.args.model
-                state_dict_path = self.args.state_dict
+            if results_directory is None:
+                visualizer = None
+                write_dir = None
             else:
-                model_path = self.model_path_pattern.format(i - 1)
-                state_dict_path = self.state_dict_path_pattern.format(i - 1)
+                visualizer = Visualizer()
+                write_dir = osp.join(results_directory, "evaluation")
+                os.makedirs(write_dir, exist_ok=True)
+            mAP = csv_eval.evaluate(self._val_loader, retinanet, visualizer=visualizer, write_dir=write_dir)
+            mAP = mAP[0][0]
+            mean_epoch_loss = np.mean(epoch_loss)
+            print(f"epoch loss: {mean_epoch_loss}, epoch mAP: {mAP}")
+            self._metrics['cycle'].append(current_cycle)
+            self._metrics['epoch'].append(epoch_num)
+            self._metrics['mAP'].append(mAP)
+            self._metrics['loss'].append(mean_epoch_loss)
+            self._metrics['lr'].append(optimizer.param_groups[0]['lr'])
+            metrics = json.dumps(self._metrics)
+            with open(osp.join(osp.dirname(results_directory), "metrics.json"), "w") as f:
+                f.write(metrics)
+            if mean_epoch_loss < min_loss:
+                min_loss = mean_epoch_loss
+                print("Minimum loss")
+                if models_directory is not None:
+                    save_models(
+                        model_path=osp.join(models_directory, "best_loss_model.pt"),
+                        state_dict_path=osp.join(models_directory, "best_loss_state_dict.pt"),
+                        model=retinanet,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                    )
+            if mAP > max_mAP:
+                max_mAP = mAP
+                print("Minimum mAP")
+                if models_directory is not None:
+                    save_models(
+                        model_path=osp.join(models_directory, "best_mAP_model.pt"),
+                        state_dict_path=osp.join(models_directory, "best_mAP_state_dict.pt"),
+                        model=retinanet,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                    )
+            scheduler.step(mean_epoch_loss)
 
-            fileModelIO = open(model_path, "rb")
-            fileStateDictIO = open(state_dict_path, "rb")
-            loaded_model = torch.load(fileModelIO)
-            state_dict = torch.load(fileStateDictIO)
-            fileModelIO.close()
-            fileStateDictIO.close()
+    def run_cycle(self, cycles, init_state_dict_path, models_directory, results_dir):
+        for i in range(1, cycles+1):
+            debugging_settings.CYCLE_NUM = i
+            print(f"Cycle: {i}")
+            state_dict_path = init_state_dict_path if (i == 1) else osp.join(models_directory, f"cycle_{i - 1:02d}","best_mAP_state_dict.pt")
+            retinanet, _, _ = self._load_model(state_dict_path=state_dict_path, num_classes=1)
+            print("creating annotations...")
+            retinanet.eval()
+            retinanet.training = False
+            self.create_annotations(model=retinanet)
+            print("Writing created annotations images")
+            results_directory = osp.join(results_dir, f"cycle_{i:02d}")
+            debugging_settings.CLASSIFICATION_SCORES_PATH = osp.join(results_dir, "classification_scores")
+            os.mkdir(results_directory)
+            # self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
+            print("training...")
+            self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), results_directory=results_directory, current_cycle=i)
 
-            gc.collect()
-            torch.cuda.empty_cache()
-            corrected_boxes, active_boxes = self.get_corrected_and_active_boxes(
-                trained_model=loaded_model,
-            )
 
-            labeling.write_active_boxes(
-                boxes=active_boxes,
-                path=self.train_file,
-                class_dict=self.index_to_class,
-            )
+def main():
+    parser.reset()
 
-            labeling.write_corrected_boxes(
-                boxes=corrected_boxes[:, [NAME, X, Y, ALPHA, LABEL]],
-                path=self.corrected_annotations_file,
-                class_dict=self.index_to_class,
-            )
+    image_loader = imageloader.CSVDataset(
+        filenames_path=parser.filenames,
+        partition=parser.partition,
+        class_list=parser.csv_classes,
+        images_dir=parser.images_dir,
+        image_extension=parser.ext,
+        transform=transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
+    )
 
-            gc.collect()
-            torch.cuda.empty_cache()
-            self.train(
-                checkpoint=state_dict,
-                save_model_path=self.model_path_pattern.format(i),
-                save_state_dict_path=self.state_dict_path_pattern.format(i),
-            )
+    gt_loader = dataloader.CSVDataset(
+        train_file=parser.ground_truth_annotations,
+        class_list=parser.csv_classes,
+        images_dir=parser.images_dir,
+        transform=transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
+        save_output_img_directory=parser.save_directory,
+    )
+
+    val_loader = dataloader.CSVDataset(
+        train_file=parser.csv_val,
+        class_list=parser.csv_classes,
+        transform=transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
+        images_dir=parser.images_dir,
+        image_extension=parser.ext,
+    )
+
+    states_dir = parser.states_dir
+    images_dir = parser.images_dir
+
+    trainer = Training(
+        image_loader=image_loader,
+        gt_loader=gt_loader,
+        val_loader=val_loader,
+        states_dir=states_dir,
+        images_dir=images_dir,
+        corrected_annotations_path=parser.corrected_annotations,
+        active_annotations_path=parser.active_annotations,
+        classes_path=parser.csv_classes,
+        epochs=parser.epochs,
+        budget=parser.budget,
+        supervised_annotations_path=parser.supervised_annotations,
+        filenames_path=parser.filenames,
+    )
+    trainer.run_cycle(cycles=parser.cycles, init_state_dict_path=parser.state_dict_path, models_directory=parser.save_models_directory, results_dir=parser.save_directory)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Get required values for box prediction and labeling.")
-    parser.add_argument("-i", "--image-dir", type=str, required=True, dest="image_dir",
-                        help="The directory where images are in.")
-    parser.add_argument("-e", "--extension", type=str, required=False, dest="ext", default=".jpg",
-                        choices=[".jpg", ".png"], help="image extension")
-    parser.add_argument("-m", "--model", required=True, type=str, dest="model",
-                        help="path to the model")
-    parser.add_argument("-s", "--state-dict", required=True, type=str, dest="state_dict",
-                        help="path to the state_dict")
-    parser.add_argument("-o", "--save-dir", type=str, required=True, dest="save_dir",
-                        help="where to save output")
-    parser.add_argument("-c", "--num-cycles", type=int, required=True, dest="num_cycles",
-                        help="number of active cycles")
-    parser.add_argument("-d", "--depth", type=int, required=True, dest="depth",
-                        choices=(18, 34, 50, 101, 52), default=50, help="ResNet depth")
-    parser.add_argument("-p", "--epochs", type=int, required=True, dest="epochs",
-                        default=20, help="Number of Epochs")
-    parser.add_argument("--image-save-dir", type=str, required=True, dest="image_save_dir",
-                        help="where to save images")
-    parser.add_argument('--model-type', type=str, default="vgg", dest="model_type",
-                        help='backbone for retinanet, must be "resnet" of "vgg"')
-    parser.add_argument('-f', '--dampening-factor', type=float, dest='dampening_param', required=True,
-                        help='dampaening parameter')
-    parser.add_argument('-q', "--num-queries", type=int, default=100, dest='num_queries',
-                        help="number of Asking boxes per cycle")
-    parser.add_argument('-n', '--noisy-thresh', type=float, required=True, dest='noisy_thresh',
-                        help='noisy threshold')
-    args = parser.parse_args()
-
-    retinanet.settings.DAMPENING_PARAMETER = args.dampening_param
-    retinanet.settings.NUM_QUERIES = args.num_queries
-    retinanet.settings.NOISY_THRESH = args.noisy_thresh
-
-    trainer = Training(args=args)
-    trainer.manage_cycles()
+    main()

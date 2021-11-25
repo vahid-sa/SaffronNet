@@ -264,10 +264,10 @@ class ResNet(nn.Module):
 
     def forward(self, inputs):
         if self.training:
-            img_batch, annotations = inputs
+            img_batch, annotations, states = inputs
         else:
             img_batch = inputs
-
+            annotations, states = None, None
         x = self.conv1(img_batch)
         x = self.bn1(x)
         x = self.relu(x)
@@ -284,7 +284,7 @@ class ResNet(nn.Module):
         gc.collect()
         torch.cuda.empty_cache()
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations)
+            return self.focalLoss(classification, regression, anchors, annotations, states)
         else:
             self.img_number += 1
             transformed_anchors = self.regressBoxes(anchors, regression)
@@ -368,18 +368,17 @@ class VGGNet(nn.Module):
 
     def forward(self, inputs):
         if self.training:
-            img_batch, annotations = inputs
+            img_batch, annotations, states, aug_img_paths, write_directory = inputs
         else:
             img_batch = inputs
-
+            annotations, states, aug_img_paths, write_directory = None, None, None, None
         x = self.vgg7bn(img_batch)
 
         regression = self.regressionModel(x)
         classification = self.classificationModel(x)
         anchors = self.anchors(img_batch)
-
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations)
+            return self.focalLoss(classification, regression, anchors, annotations, states, aug_img_paths, write_directory)
         else:
             transformed_anchors = self.regressBoxes(anchors, regression)
             transformed_anchors = self.clipBoxes(
@@ -502,3 +501,12 @@ def resnet152(num_classes, pretrained=False, **kwargs):
         model.load_state_dict(model_zoo.load_url(
             model_urls['resnet152'], model_dir='.'), strict=False)
     return model
+
+
+###Temp
+def draw_anchors(img: torch.tensor, anchors: torch.tensor):
+    anchors = np.squeeze(anchors.detach().cpu().numpy())
+    img = img.detach().cpu().numpy()
+    print('anchors', anchors.shape, anchors.dtype)
+    print('img', img.shape, img.dtype)
+###Temp

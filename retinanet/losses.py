@@ -1,9 +1,17 @@
+import os
+import logging
+import json
 import numpy as np
+from cv2 import cv2
 import torch
 import torch.nn as nn
 import gc
+from os import path as osp
+from sklearn import preprocessing
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
+import debugging_settings
+from utils.visutils import draw_line
 
 
 def absolute(tensor: torch.tensor, large_matrix: bool):
@@ -31,20 +39,11 @@ def distance(ax, bx, large_matrix: bool = False):
     -------
     (N, K) ndarray of distance between all x in ax, bx
     """
-    gc.collect()
-    torch.cuda.empty_cache()
     ax_prepared, bx_prepared = prepare(ax, bx)
+    dist = torch.abs(ax_prepared - bx_prepared)
+    # absolute(tensor=dist, large_matrix=large_matrix)
 
-    gc.collect()
-    torch.cuda.empty_cache()
-
-    dist = ax_prepared - bx_prepared
-    del ax_prepared, bx_prepared
-    gc.collect()
-    torch.cuda.empty_cache()
-    absolute(tensor=dist, large_matrix=large_matrix)
     return dist
-
 
 def calc_distance(a, b):
     ax = a[:, 0]
@@ -71,31 +70,43 @@ def calc_distance(a, b):
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations):
-        print(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
+    def forward(self, classifications, regressions, anchors, annotations, states, img_paths, write_directory=None):
         alpha = 0.95
         gamma = 2.0
+        predictions = torch.add(anchors, regressions)
         batch_size = classifications.shape[0]
         classification_losses = []
         xydistance_regression_losses = []
         angle_distance_regression_losses = []
-
         anchor = anchors[0, :, :]
 
         anchor_ctr_x = anchor[:, 0]
         anchor_ctr_y = anchor[:, 1]
         anchor_alpha = anchor[:, 2]
+        # print(f"x: {anchor_ctr_x.max()}\ny: {anchor_ctr_y.max()}\na: {anchor_alpha.max()}")
         for j in range(batch_size):
 
             gc.collect()
             torch.cuda.empty_cache()
             classification = classifications[j, :, :]
+            with open(debugging_settings.CLASSIFICATION_SCORES_PATH, "a") as f:
+                hist, _ = np.histogram(classification.detach().cpu().numpy(), bins=10, range=(0.0, 1.0))
+                f.write(json.dumps({"cycle": debugging_settings.CYCLE_NUM, "epoch": debugging_settings.EPOCH_NUM, "scores": hist.tolist()}))
             regression = regressions[j, :, :]
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
                 center_alpha_annotation[:, NUM_VARIABLES] != -1]
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
-
+            state = states[j, :, :, :]
+            prediction = predictions[j, :, :]
+            gt_map = FocalLoss.set_noisy_anchors(state=state, anchor=anchor)
+            # img = torch.zeros(size=(state.shape[:2]), dtype=torch.uint8)
+            true_indices = anchor[gt_map].to(dtype=torch.int64, device='cpu')
+            true_indices = true_indices[:, [1, 0]]
+            true_indices = true_indices.t()
+            true_indices = tuple(true_indices.tolist())
+            # img[true_indices] = 255
+            # img = img.numpy()
             if center_alpha_annotation.shape[0] == 0:
                 if torch.cuda.is_available():
                     alpha_factor = torch.ones(
@@ -172,13 +183,13 @@ class FocalLoss(nn.Module):
                     assigned_annotations[:, 3].long()] = 1
 
             # -------------------------------------------------------------------------
-            dampening_factor = FocalLoss.get_dampening_factor(
-                annotations=annotations,
-                targets=targets,
-                positive_indices=positive_indices,
-                background_positive_indices=background_positive_indices,
-                min_distances_args=dxy_argmin,
-            )
+            # dampening_factor = FocalLoss.get_dampening_factor(
+            #     annotations=annotations,
+            #     targets=targets,
+            #     positive_indices=positive_indices,
+            #     background_positive_indices=background_positive_indices,
+            #     min_distances_args=dxy_argmin,
+            # )
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
             else:
@@ -201,11 +212,21 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
+            logging.debug(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
+            dampening_factor = torch.where(gt_map, 1.0, retinanet.settings.DAMPENING_PARAMETER)
             cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
-
+            """ writing images with positive indices drawn on
+            if (write_directory is not None) and (img_paths is not None):
+                # FocalLoss.write_img_loss(read_path=img_paths[j], cls_loss=cls_loss, anchors_like=anchor, write_dir=write_directory)
+                pos_idx_dir = osp.join(write_directory, "positive_indices")
+                os.makedirs(pos_idx_dir, exist_ok=True)
+                FocalLoss.write_positive_indices(regressions=regression, anchors=anchor,
+                                                 positive_indices=positive_indices, read_path=img_paths[j],
+                                                 write_dir=pos_idx_dir, annotations=annotations[j], active_states=state)
+            """
+            # cv2.imwrite(osp.expanduser(f'~/tmp/{np.random.randint(1000)}.jpg'), img)
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
-
             # compute the loss for regression
 
             if positive_indices.sum() > 0:
@@ -307,4 +328,53 @@ class FocalLoss(nn.Module):
             accepted_annotations_status == 1.0, 1.0, DAMPENING_PARAMETER).type(dampening_factor.dtype)
         return dampening_factor
 
+    @staticmethod
+    def set_noisy_anchors(anchor, state):
+        state = torch.squeeze(state)
+        points = tuple(torch.round(anchor[:, [1, 0]]).type(torch.LongTensor).detach().cpu().numpy().T.tolist())
+        return state[points]
 
+    @staticmethod
+    def write_img_loss(read_path, cls_loss, write_dir, anchors_like):
+        img = cv2.imread(read_path)
+        img = np.full(shape=img.shape, fill_value=255.0, dtype=np.float64)
+        img_channels = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+        cls_loss = np.squeeze(cls_loss.detach().cpu().numpy()).astype(np.float64)
+        cls_loss = (cls_loss - np.min(cls_loss)) / (np.max(cls_loss) - np.min(cls_loss))
+        points = tuple(torch.round(anchors_like[:, [1, 0]]).type(torch.LongTensor).detach().cpu().numpy().T.tolist())
+        for i in range(len(img_channels)):
+            img_channels[i][points] *= cls_loss
+        img = np.concatenate([img_channels[0][:, :, np.newaxis], img_channels[1][:, :, np.newaxis], img_channels[2][:, :, np.newaxis]], axis=-1)
+        img = img.astype(np.uint8)
+        write_path = osp.join(write_dir, osp.basename(read_path))
+        cv2.imwrite(write_path, img)
+
+    @staticmethod
+    def write_positive_indices(regressions, anchors, annotations, positive_indices, active_states, read_path, write_dir):
+        predictions = regressions + anchors
+        predictions = predictions[positive_indices]
+        img = cv2.imread(read_path)
+        img = img.astype(np.float64)
+        b, g, r = img[:, :, 0], img[:, :, 1], img[:, :, 2]
+        active_states = np.squeeze(active_states.cpu().detach().numpy())
+        b[active_states] *= 0.5
+        g[active_states] *= 0.5
+        r[active_states] *= 0.5
+        img = img.astype(np.uint8)
+        for prediction in predictions:
+            x, y, alpha = prediction
+            img = draw_line(img, (x, y), alpha, line_color=(255, 255, 0), center_color=(0, 0, 0), half_line=True,
+                              distance_thresh=40, line_thickness=2)
+        for annotation in annotations:
+            x, y, alpha = annotation[:3]
+            status = annotation[-1]
+            if status == 1:
+                color = (0, 255, 0)
+            elif status == 0:
+                color = (255, 0, 0)
+            else:
+                color = (0, 255, 255)
+            img = draw_line(img, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True,
+                            distance_thresh=40, line_thickness=2)
+        write_path = osp.join(write_dir, osp.basename(read_path))
+        cv2.imwrite(write_path, img)
