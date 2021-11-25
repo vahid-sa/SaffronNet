@@ -192,13 +192,13 @@ class Training:
             dataset_train, num_workers=2, collate_fn=dataloader.collater, batch_sampler=sampler)
         return train_loader
 
-    def _load_model(self, state_dict_path, num_classes):
+    def _load_model(self, state_dict_path, num_classes, learning_rate=1e-5):
         retinanet = model.vgg7(num_classes=num_classes, pretrained=True)
         retinanet = retinanet.to(device=self._device)
         retinanet = torch.nn.DataParallel(retinanet)
         retinanet = retinanet.to(device=self._device)
 
-        optimizer = torch.optim.Adam(retinanet.parameters(), lr=1e-5)
+        optimizer = torch.optim.Adam(retinanet.parameters(), lr=learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=3, verbose=True)
 
         checkpoint = torch.load(state_dict_path)
