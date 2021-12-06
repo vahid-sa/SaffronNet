@@ -1,38 +1,38 @@
+import os
 import argparse
 import torch
+from os import path as osp
 from torchvision import transforms
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
-from retinanet import csv_eval
+from retinanet import csv_eval, my_model as model
+
+class Args:
+    def __init__(self):
+        self.csv_annotations_path = osp.abspath("./annotations/validation.csv")
+        self.state_dict_path = osp.expanduser("~/Saffron/init_fully_trained_weights/init_state_dict.pt")
+        self.images_dir = osp.expanduser("~/Saffron/dataset/Train/")
+        self.class_list_path = osp.abspath("./annotations/labels.csv")
+        self.iou_threshold = 0.5
+        self.use_gpu = True
 
 
-def main(args=None):
-    parser = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
-
-    parser.add_argument('--csv_annotations_path', help='Path to CSV annotations')
-    parser.add_argument('--model_path', help='Path to model', type=str)
-    parser.add_argument('--images_path',help='Path to images directory',type=str)
-    parser.add_argument('--class_list_path',help='Path to classlist csv',type=str)
-    parser.add_argument('--iou_threshold',help='IOU threshold used for evaluation',type=float, default=0.5)
-    parser = parser.parse_args(args)
-
+def main(args):
+    device = 'cuda' if (torch.cuda.is_available() and args.use_gpu) else 'cpu'
     #dataset_val = CocoDataset(parser.coco_path, set_name='val2017',transform=transforms.Compose([Normalizer(), Resizer()]))
-    dataset_val = CSVDataset(parser.csv_annotations_path,parser.class_list_path,transform=transforms.Compose([Normalizer(), Resizer()]), images_dir=parser.images_path)
+    dataset_val = CSVDataset(
+        args.csv_annotations_path,
+        args.class_list_path,
+        transform=transforms.Compose([Normalizer(), Resizer()]),
+        images_dir=args.images_dir,
+    )
     # Create the model
-    #retinanet = model.resnet50(num_classes=dataset_val.num_classes(), pretrained=True)
-    retinanet=torch.load(parser.model_path)
+    retinanet = model.vgg7(num_classes=dataset_val.num_classes(), pretrained=True)
+    # retinanet=torch.load(parser.model_path)
 
-    use_gpu = True
-
-    if use_gpu:
-        if torch.cuda.is_available():
-            retinanet = retinanet.cuda()
-
-    if torch.cuda.is_available():
-        #retinanet.load_state_dict(torch.load(parser.model_path))
-        retinanet = torch.nn.DataParallel(retinanet).cuda()
-    else:
-        retinanet.load_state_dict(torch.load(parser.model_path))
-        retinanet = torch.nn.DataParallel(retinanet)
+    retinanet = retinanet.to(device=device)
+    retinanet = torch.nn.DataParallel(retinanet).to(device=device)
+    checkpoint = torch.load(args.state_dict_path)
+    retinanet.load_state_dict(checkpoint['model_state_dict'])
 
     retinanet.training = False
     retinanet.eval()
@@ -42,4 +42,5 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    main()
+    arguments = Args()
+    main(args=arguments)
