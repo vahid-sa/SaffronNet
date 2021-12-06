@@ -97,8 +97,17 @@ class Training:
         self._image_loader = image_loader
         self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=filenames_path, supervised_annotations_path=supervised_annotations_path)
         # self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=None, supervised_annotations_path=None)
+        print(
+            "\nloader: {0}\nstates_dir: {1}\nradius: {2}\nimage_string_file_numbers_path: {3}\nsupervised_annotations_path: {4}\n".format(
+                self._image_loader,
+                self._states_dir,
+                radius,
+                filenames_path,
+                supervised_annotations_path,
+            )
+        )
         self._device = "cuda:0" if (use_gpu and torch.cuda.is_available()) else "cpu"
-        self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': []}
+        self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': [], 'mAP_train': []}
 
     def write_predicted_images(self, direc):
         os.makedirs(direc, exist_ok=True)
@@ -186,11 +195,21 @@ class Training:
             save_output_img_directory=loader_directory,
         )
 
+        train_eval = dataloader.CSVDataset(
+            train_file=self._active_annotations_path,
+            class_list=self._classes_path,
+            images_dir=self._img_dir,
+            ground_truth_states_directory=self._states_dir,
+            transform=transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
+            save_output_img_directory=loader_directory,
+        )
+
         sampler = dataloader.AspectRatioBasedSampler(
             dataset_train, batch_size=1, drop_last=False)
         train_loader = DataLoader(
-            dataset_train, num_workers=2, collate_fn=dataloader.collater, batch_sampler=sampler)
-        return train_loader
+            dataset_train, num_workers=2, collate_fn=dataloader.collater, batch_sampler=sampler,
+        )
+        return train_loader, train_eval
 
     def _load_model(self, state_dict_path, num_classes, learning_rate=1e-5):
         retinanet = model.vgg7(num_classes=num_classes, pretrained=True)
@@ -208,7 +227,7 @@ class Training:
         return retinanet, optimizer, scheduler
 
     def train(self, state_dict_path, current_cycle, models_directory=None, results_directory=None):
-        train_loader = self._load_training_data(loader_directory=results_directory)
+        train_loader, dataset_train = self._load_training_data(loader_directory=results_directory)
         retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
 
         print("initial evaluation...")
@@ -300,19 +319,25 @@ class Training:
             if results_directory is None:
                 visualizer = None
                 write_dir = None
+                train_write_dir = None
             else:
                 visualizer = Visualizer()
                 write_dir = osp.join(results_directory, "evaluation")
                 os.makedirs(write_dir, exist_ok=True)
+                train_write_dir = osp.join(results_directory, "train_evaluation")
+                os.makedirs(train_write_dir, exist_ok=True)
+            mAP_train = csv_eval.evaluate(dataset_train, retinanet, visualizer=visualizer, write_dir=train_write_dir)
+            mAP_train = mAP_train[0][0]
             mAP = csv_eval.evaluate(self._val_loader, retinanet, visualizer=visualizer, write_dir=write_dir)
             mAP = mAP[0][0]
             mean_epoch_loss = np.mean(epoch_loss)
-            print(f"epoch loss: {mean_epoch_loss}, epoch mAP: {mAP}")
+            print(f"epoch loss: {mean_epoch_loss}, epoch_mAP_train: {mAP_train} epoch mAP: {mAP}")
             self._metrics['cycle'].append(current_cycle)
             self._metrics['epoch'].append(epoch_num)
             self._metrics['mAP'].append(mAP)
             self._metrics['loss'].append(mean_epoch_loss)
             self._metrics['lr'].append(optimizer.param_groups[0]['lr'])
+            self._metrics['mAP_train'].append(mAP_train)
             metrics = json.dumps(self._metrics)
             with open(osp.join(osp.dirname(results_directory), "metrics.json"), "w") as f:
                 f.write(metrics)
