@@ -53,8 +53,7 @@ class PyramidFeatures(nn.Module):
 
         # "P7 is computed by applying ReLU followed by a 3x3 stride-2 conv on P6"
         self.P7_1 = nn.ReLU()
-        self.P7_2 = nn.Conv2d(feature_size, feature_size,
-                              kernel_size=3, stride=2, padding=1)
+        self.P7_2 = nn.Conv2d(feature_size, feature_size, kernel_size=3, stride=2, padding=1)
 
     def forward(self, inputs):
         C3, C4, C5 = inputs
@@ -355,9 +354,8 @@ class VGGNet(nn.Module):
             num_features_in=256, feature_size=256, num_classes=num_classes)
 
         self.anchors = Anchors()
-        self.regressBoxes = BBoxTransform()
-        self.clipBoxes = ClipBoxes()
         self.focalLoss = losses.FocalLoss()
+        self.box_model = BoxesModel()
 
         prior = 0.01
         self.classificationModel.output.weight.data.fill_(0)
@@ -365,6 +363,14 @@ class VGGNet(nn.Module):
             -math.log((1.0 - prior) / prior))
         self.regressionModel.output.weight.data.fill_(0)
         self.regressionModel.output.bias.data.fill_(0)
+        self._training_boxes_store = {'scores': [], 'labels': [], 'boxes': []}
+
+    def reset_store(self):
+        self._training_boxes_store = {'scores': [], 'labels': [], 'boxes': []}
+
+    @property
+    def training_boxes_store(self):
+        return self._training_boxes_store
 
     def forward(self, inputs):
         if self.training:
@@ -378,60 +384,64 @@ class VGGNet(nn.Module):
         classification = self.classificationModel(x)
         anchors = self.anchors(img_batch)
         if self.training:
+            scores, labels, boxes = self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
+            scores = scores.cpu().tolist()
+            labels = labels.cpu().tolist()
+            boxes = boxes.cpu().tolist()
+            self._training_boxes_store['scores'].extend(scores)
+            self._training_boxes_store['labels'].extend(labels)
+            self._training_boxes_store['boxes'].extend(boxes)
             return self.focalLoss(classification, regression, anchors, annotations, states, aug_img_paths, write_directory)
         else:
-            transformed_anchors = self.regressBoxes(anchors, regression)
-            transformed_anchors = self.clipBoxes(
-                transformed_anchors, img_batch)
+            return self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
 
-            finalResult = [[], [], []]
 
-            finalScores = torch.Tensor([])
-            finalAnchorBoxesIndexes = torch.Tensor([]).long()
-            finalAnchorBoxesCoordinates = torch.Tensor([])
-            if torch.cuda.is_available():
-                finalScores = finalScores.cuda()
-                finalAnchorBoxesIndexes = finalAnchorBoxesIndexes.cuda()
-                finalAnchorBoxesCoordinates = finalAnchorBoxesCoordinates.cuda()
+class BoxesModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.regressBoxes = BBoxTransform()
+        self.clipBoxes = ClipBoxes()
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-            for i in range(classification.shape[2]):
-                scores = torch.squeeze(classification[:, :, i])
-                anchorBoxes = torch.squeeze(transformed_anchors)
+    def forward(self, img_batch, anchors, regression, classification):
+        transformed_anchors = self.regressBoxes(anchors, regression)
+        transformed_anchors = self.clipBoxes(transformed_anchors, img_batch)
 
-                anchorBoxes, scores = filter(
-                    anchorBoxes, scores, min_score=0.05)
-                count = scores.shape[0]
-                if count == 0:
-                    continue
+        finalResult = [[], [], []]
 
-                anchors_nms_idx = torch.Tensor([]).long()
-                if torch.cuda.is_available():
-                    anchors_nms_idx = anchors_nms_idx.cuda()
+        finalScores = torch.Tensor([]).to(device=self.device)
+        finalAnchorBoxesIndexes = torch.LongTensor([]).to(device=self.device)
+        finalAnchorBoxesCoordinates = torch.Tensor([]).to(device=self.device)
 
-                anchors_nms_idx = nms(
-                    anchorBoxes,
-                    scores,
-                    min_score=0.5)
-                if len(anchors_nms_idx) == 0:
-                    continue
-                finalResult[0].extend(scores[anchors_nms_idx])
-                finalResult[1].extend(torch.tensor(
-                    [i] * anchors_nms_idx.shape[0]))
-                finalResult[2].extend(anchorBoxes[anchors_nms_idx])
+        for i in range(classification.shape[2]):
+            scores = torch.squeeze(classification[:, :, i])
+            anchorBoxes = torch.squeeze(transformed_anchors)
 
-                finalScores = torch.cat(
-                    (finalScores, scores[anchors_nms_idx]))
-                finalAnchorBoxesIndexesValue = torch.tensor(
-                    [i] * anchors_nms_idx.shape[0])
-                if torch.cuda.is_available():
-                    finalAnchorBoxesIndexesValue = finalAnchorBoxesIndexesValue.cuda()
+            anchorBoxes, scores = filter(
+                anchorBoxes, scores, min_score=0.05)
+            count = scores.shape[0]
+            if count == 0:
+                continue
 
-                finalAnchorBoxesIndexes = torch.cat(
-                    (finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
-                finalAnchorBoxesCoordinates = torch.cat(
-                    (finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+            anchors_nms_idx = torch.LongTensor([]).to(device=self.device)
 
-            return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
+            anchors_nms_idx = nms(
+                anchorBoxes,
+                scores,
+                min_score=0.5)
+            if len(anchors_nms_idx) == 0:
+                continue
+            finalResult[0].extend(scores[anchors_nms_idx])
+            finalResult[1].extend(torch.tensor([i] * anchors_nms_idx.shape[0]))
+            finalResult[2].extend(anchorBoxes[anchors_nms_idx])
+
+            finalScores = torch.cat((finalScores, scores[anchors_nms_idx]))
+            finalAnchorBoxesIndexesValue = torch.tensor([i] * anchors_nms_idx.shape[0]).to(device=self.device)
+
+            finalAnchorBoxesIndexes = torch.cat((finalAnchorBoxesIndexes, finalAnchorBoxesIndexesValue))
+            finalAnchorBoxesCoordinates = torch.cat((finalAnchorBoxesCoordinates, anchorBoxes[anchors_nms_idx]))
+
+        return [finalScores, finalAnchorBoxesIndexes, finalAnchorBoxesCoordinates]
 
 
 def vgg7(num_classes, pretrained=True, **kwargs):
