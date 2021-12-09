@@ -1,4 +1,5 @@
 import os
+import gc
 import torch
 import json
 import numpy as np
@@ -7,6 +8,7 @@ from cv2 import cv2
 from math import inf
 from torchvision import transforms
 from torch.utils.data import DataLoader
+from pynvml.smi import nvidia_smi
 import debugging_settings
 from retinanet import dataloader, csv_eval
 from retinanet import my_model as model
@@ -46,8 +48,17 @@ class Training:
             images_dir=self._img_dir,
             image_extension=".jpg",
         )
+        self._memory_status_path = osp.join(osp.dirname(metrics_path), "memory_status.json")
+        self._memory_status = {"cycle": [], "epoch": [], "iteration": [], "used": [], "free": [], "total": []}
         os.makedirs(osp.dirname(self._metrics_path), exist_ok=True)
 
+    def _reset_memory(self):
+        torch.cuda.reset_max_memory_allocated(device=torch.device(self._device))
+        torch.cuda.reset_max_memory_cached(device=torch.device(self._device))
+        torch.cuda.reset_peak_memory_stats(device=torch.device(self._device))
+        torch.cuda.empty_cache()
+        gc.collect()
+    
     def _load_training_data(self, loader_directory=None):
         dataset_train = dataloader.CSVDataset(
             train_file=self._annotations_file_path,
@@ -119,6 +130,19 @@ class Training:
         with open(self._metrics_path, "w") as f:
             f.write(metrics)
 
+    def _log_memory(self, cycle, epoch, iteration):
+        nvsmi = nvidia_smi.getInstance()
+        mem_stat = nvsmi.DeviceQuery('memory.free, memory.total, memory.used')
+        mem_stat = mem_stat['gpu'][0]['fb_memory_usage']
+        self._memory_status["cycle"].append(cycle)
+        self._memory_status["epoch"].append(epoch)
+        self._memory_status["iteration"].append(iteration)
+        self._memory_status['used'].append(mem_stat['used'])
+        self._memory_status['free'].append(mem_stat['free'])
+        self._memory_status['total'].append(mem_stat['total'])
+        with open(self._memory_status_path, "w") as f:
+            f.write(json.dumps(self._memory_status))
+
     def train(self, state_dict_path, models_directory, cycle_num=-1):
         train_loader = self._load_training_data()
         retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
@@ -134,24 +158,29 @@ class Training:
         self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP)
 
         for epoch_num in range(self._epochs):
+            self._reset_memory()
+
             debugging_settings.EPOCH_NUM = epoch_num + 1
             retinanet.train()
             retinanet.training = True
-            optimizer.zero_grad()
             epoch_loss = []
-            for _, data in enumerate(train_loader):
+            for iter, data in enumerate(train_loader):
+                self._reset_memory()
                 params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
+                optimizer.zero_grad()
                 classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(params)
                 classification_loss = classification_loss.mean()
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
                 loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
+                self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                 if loss == 0:
                     continue
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
                 optimizer.step()
-                epoch_loss.append(float(loss))
+                loss_value = float(loss.detach().cpu())
+                epoch_loss.append(loss_value)
                 print(
                     'Cycle: {0:02d} | Epoch: {1:03d}  | Classification loss: {2:1.3f} | XY Regression loss: {3:1.3f} | Angle Regression loss: {4:1.3f}| Running loss: {5:1.3f}'.format(
                         cycle_num,
@@ -159,13 +188,15 @@ class Training:
                         float(classification_loss),
                         float(xydistance_regression_loss),
                         float(angle_distance_regression_losses),
-                        loss,
+                        loss_value,
                     )
                 )
 
                 del classification_loss
                 del xydistance_regression_loss
                 del angle_distance_regression_losses
+                del loss
+                del params
 
             mAP = self._evaluate(model=retinanet)
             mean_epoch_loss = np.mean(epoch_loss)
@@ -313,5 +344,7 @@ class ActiveTraining(Training):
             debugging_settings.CLASSIFICATION_SCORES_PATH = osp.join(results_dir, "classification_scores")
             os.mkdir(results_directory)
             # self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
+            del retinanet
+            self._reset_memory()
             print("training...")
             self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), cycle_num=i)
