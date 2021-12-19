@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from pynvml.smi import nvidia_smi
 import debugging_settings
 from retinanet import dataloader, csv_eval
-from retinanet import my_model as model
+from retinanet import model
 from prediction import imageloader
 from utils.active_tools import Active
 from utils.visutils import draw_line, Visualizer
