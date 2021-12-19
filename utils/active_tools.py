@@ -72,16 +72,21 @@ class Active:
         scores = np.abs(self._boxes[:, self._SCORE] - 0.5)
         sorted_indices = scores.argsort()
         sorted_boxes = self._boxes[sorted_indices]
-        i = 0
+        i = -1
         while len(indices) < budget:
+            i += 1
             if i >= len(sorted_boxes):
                 break
             box = sorted_boxes[i]
             position = self._loader.image_names.index(f"{int(box[self._NAME]):03d}")
             x, y = int(box[self._X]), int(box[self._Y])
-            if not self._states[position, y, x]:
+            try:
+                state = self._states[position, y, x]
+            except IndexError:
+                logging.error("Index out of range error", exc_info=True)
+                continue
+            if not state:
                 indices.append(sorted_indices[i])
-            i += 1
         self._uncertain_indices = indices
 
     def _select_ground_truth_states(self):
@@ -138,9 +143,13 @@ class Active:
             box = self._boxes[i]
             name, x, y = int(box[self._NAME]), int(box[self._X]), int(box[self._Y])
             position = int(self._loader.image_names.index(f"{name:03d}"))
-            if y < self._states.shape[1] and x < self._states.shape[2]:
-                if (not self._states[position, y, x]) and (True in self._states[position, :, :]):
-                    indices.append(i)
+            try:
+                state = self._states[position, y, x]
+            except IndexError:
+                logging.error("Index out of range error", exc_info=True)
+                continue
+            if (not state) and (True in self._states[position, :, :]):
+                indices.append(i)
         self._noisy_indices = indices
 
     def _concat_noisy_and_corrected_boxes(self):
