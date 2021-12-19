@@ -1,3 +1,4 @@
+import logging
 import os
 import gc
 import torch
@@ -49,7 +50,7 @@ class Training:
             image_extension=".jpg",
         )
         self._memory_status_path = osp.join(osp.dirname(metrics_path), "memory_status.json")
-        self._memory_status = {"cycle": [], "epoch": [], "iteration": [], "used": [], "free": [], "total": []}
+        self._memory_status = {"cycle": [], "epoch": [], "iteration": [], "used": [], "free": [], "total": [], "cuda_error": []}
         os.makedirs(osp.dirname(self._metrics_path), exist_ok=True)
 
     def _reset_memory(self):
@@ -58,7 +59,7 @@ class Training:
         torch.cuda.reset_peak_memory_stats(device=torch.device(self._device))
         torch.cuda.empty_cache()
         gc.collect()
-    
+
     def _load_training_data(self, loader_directory=None):
         dataset_train = dataloader.CSVDataset(
             train_file=self._annotations_file_path,
@@ -130,7 +131,7 @@ class Training:
         with open(self._metrics_path, "w") as f:
             f.write(metrics)
 
-    def _log_memory(self, cycle, epoch, iteration):
+    def _log_memory(self, cycle, epoch, iteration, cuda_error=False):
         nvsmi = nvidia_smi.getInstance()
         mem_stat = nvsmi.DeviceQuery('memory.free, memory.total, memory.used')
         mem_stat = mem_stat['gpu'][0]['fb_memory_usage']
@@ -140,6 +141,7 @@ class Training:
         self._memory_status['used'].append(mem_stat['used'])
         self._memory_status['free'].append(mem_stat['free'])
         self._memory_status['total'].append(mem_stat['total'])
+        self._memory_status['cuda_error'].append(cuda_error)
         with open(self._memory_status_path, "w") as f:
             f.write(json.dumps(self._memory_status))
 
@@ -156,27 +158,38 @@ class Training:
         )
         print(f"initial mAP: {mAP}")
         self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP)
-
+        num_cuda_errors = 0
         for epoch_num in range(self._epochs):
-            self._reset_memory()
-
             debugging_settings.EPOCH_NUM = epoch_num + 1
             retinanet.train()
             retinanet.training = True
             epoch_loss = []
             for iter, data in enumerate(train_loader):
-                self._reset_memory()
                 params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
                 optimizer.zero_grad()
-                classification_loss, xydistance_regression_loss, angle_distance_regression_losses = retinanet(params)
+                try:
+                    losses = retinanet(params)
+                except RuntimeError:
+                    logging.error("cuda out of memory", exc_info=True)
+                    num_cuda_errors += 1
+                    continue
+                classification_loss, xydistance_regression_loss, angle_distance_regression_losses = losses
                 classification_loss = classification_loss.mean()
                 xydistance_regression_loss = xydistance_regression_loss.mean()
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
                 loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
-                self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                 if loss == 0:
+                    # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                     continue
-                loss.backward()
+                self._reset_memory()
+                try:
+                    loss.backward()
+                except RuntimeError:
+                    # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter, cuda_error=True)
+                    num_cuda_errors += 1
+                    print("CUDA out of memory.")
+                    continue
+                # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                 torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
                 optimizer.step()
                 loss_value = float(loss.detach().cpu())
@@ -211,6 +224,7 @@ class Training:
             self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP, loss=mean_epoch_loss)
             self._update_metrics(cycle=cycle_num, epoch=epoch_num, mAP=mAP, loss=mean_epoch_loss, lr=optimizer.param_groups[0]['lr'])
             scheduler.step(mean_epoch_loss)
+        print(f"cuda_errors: {num_cuda_errors}")
 
 
 class ActiveTraining(Training):
@@ -345,6 +359,5 @@ class ActiveTraining(Training):
             os.mkdir(results_directory)
             # self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
             del retinanet
-            self._reset_memory()
             print("training...")
             self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), cycle_num=i)
