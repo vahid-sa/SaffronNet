@@ -9,7 +9,7 @@ import retinanet
 logging.basicConfig(level=logging.DEBUG)
 retinanet.settings.NUM_QUERIES = 100
 retinanet.settings.NOISY_THRESH = 0.5
-# retinanet.settings.DAMPENING_PARAMETER = 0.0
+retinanet.settings.DAMPENING_PARAMETER = 0.0
 
 
 class parser:
@@ -24,14 +24,14 @@ class parser:
     state_dict_path = osp.expanduser('~/Saffron/init_fully_trained_weights/init_state_dict.pt')
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
     active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
-    save_directory = osp.expanduser("~/tmp/saffron_imgs/")
+    save_directory = osp.expanduser("~/st/Saffron/imgs/")
     epochs = 30
     csv_val = osp.abspath("./annotations/validation.csv")
-    save_models_directory = osp.expanduser("~/Saffron/weights/active")
+    save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
     budget = 100
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
-    metrics_path = osp.expanduser("~/Safffron/metrics.json")
+    metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
 
     @staticmethod
     def reset():

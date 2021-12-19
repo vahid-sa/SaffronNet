@@ -4,7 +4,7 @@ import numpy as np
 from os import path as osp
 from matplotlib import pyplot as plt
 
-path = "/run/user/1000/gvfs/smb-share:server=172.17.3.145,share=saeedi97/Safffron/metrics.json"
+path = "/run/user/1000/gvfs/smb-share:server=172.17.3.145,share=st_saeedi97/Saffron/metrics.json"
 
 f = open(path, "r")
 string = f.read()
@@ -17,7 +17,7 @@ lrs = metrics['lr']
 cycles = np.unique(metrics['cycle'])
 epochs = np.unique(metrics['epoch'])
 cycles = cycles - 1 if min(cycles) > 0 else cycles
-fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+fig, axs = plt.subplots(3, 1, figsize=(12, 4))
 axs[0].plot(np.arange(len(maps)), maps, color='green')
 axs[0].title.set_text("mAP")
 axs[1].plot(np.arange(len(losses)), losses, color='red')
