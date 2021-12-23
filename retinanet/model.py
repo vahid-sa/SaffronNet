@@ -9,7 +9,7 @@ import torch.utils.model_zoo as model_zoo
 from retinanet.nms import nms, filter
 from retinanet.utils import BasicBlock, Bottleneck, BBoxTransform, ClipBoxes
 from retinanet.anchors import Anchors
-from retinanet import my_losses as losses
+from retinanet import losses
 from utils.visutils import draw_line
 from .settings import NUM_VARIABLES, ANGLE_SPLIT
 import torchvision.models as models
@@ -363,14 +363,14 @@ class VGGNet(nn.Module):
             -math.log((1.0 - prior) / prior))
         self.regressionModel.output.weight.data.fill_(0)
         self.regressionModel.output.bias.data.fill_(0)
-        self._training_boxes_store = {'scores': [], 'labels': [], 'boxes': []}
+        self._predictions_store = {'classification': [], 'regression': [], 'anchors': []}
 
     def reset_store(self):
-        self._training_boxes_store = {'scores': [], 'labels': [], 'boxes': []}
+        self._predictions_store = {'classification': [], 'regression': [], 'anchors': []}
 
     @property
-    def training_boxes_store(self):
-        return self._training_boxes_store
+    def predictions_store(self):
+        return self._predictions_store
 
     def forward(self, inputs):
         if self.training:
@@ -379,18 +379,13 @@ class VGGNet(nn.Module):
             img_batch = inputs
             annotations, states, aug_img_paths, write_directory = None, None, None, None
         x = self.vgg7bn(img_batch)
-
         regression = self.regressionModel(x)
         classification = self.classificationModel(x)
         anchors = self.anchors(img_batch)
+        self._predictions_store['classification'] = classification.detach().cpu().numpy()
+        self._predictions_store['regression'] = regression.detach().cpu().numpy()
+        self._predictions_store['anchors'] = anchors.detach().cpu().numpy()
         if self.training:
-            scores, labels, boxes = self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
-            scores = scores.cpu().tolist()
-            labels = labels.cpu().tolist()
-            boxes = boxes.cpu().tolist()
-            self._training_boxes_store['scores'].extend(scores)
-            self._training_boxes_store['labels'].extend(labels)
-            self._training_boxes_store['boxes'].extend(boxes)
             return self.focalLoss(classification, regression, anchors, annotations, states, aug_img_paths, write_directory)
         else:
             return self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
@@ -428,7 +423,7 @@ class BoxesModel(nn.Module):
             anchors_nms_idx = nms(
                 anchorBoxes,
                 scores,
-                min_score=0.5)
+                min_score=0.25)
             if len(anchors_nms_idx) == 0:
                 continue
             finalResult[0].extend(scores[anchors_nms_idx])
