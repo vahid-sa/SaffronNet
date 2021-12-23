@@ -257,6 +257,7 @@ class ActiveTraining(Training):
         self._corrected_annotations_path = corrected_annotations_path
         self._active_annotations_path = active_annotations_path
         self._gt_loader = self._load_groundtruth_data(gt_annotations_path=groundtruth_annotations_path)
+        self._metrics["annotations"] = []
 
     def _load_groundtruth_data(self, gt_annotations_path, loader_directory=None):
         gt_loader = dataloader.CSVDataset(
@@ -343,6 +344,28 @@ class ActiveTraining(Training):
             classes_list_path=self._classes_path,
         )
 
+    def _log_active_annotations_metrics(self, num_cycle):
+        uncertain_queries = self._active.uncertain_predictions
+        gt_annotations = self._active.ground_truth_annotations
+        scores = uncertain_queries[:, -1]
+        num_labeled = len(gt_annotations)
+        num_images = len(np.unique(uncertain_queries[:, 0]))
+        num_higher_than_half_queries = sum((scores >= 0.5).tolist())
+        num_lower_than_half_queries = sum((scores < 0.5).tolist())
+        logging.info(
+            "# new labels: {0}\n# images containing queries: {1}\n# query scores > 0.5: {2}\n# query scores < 0.5: {3}".format(
+                num_labeled, num_images, num_higher_than_half_queries, num_lower_than_half_queries,
+            )
+        )
+        metrics = {
+            "num_cycle": num_cycle,
+            "num_new_labels": num_labeled,
+            "num_higher_half_queries": num_higher_than_half_queries,
+            "num_lower_half_queries": num_lower_than_half_queries,
+        }
+        self._metrics["annotations"].append(metrics)
+        # written in parent
+
     def run_cycle(self, cycles, init_state_dict_path, models_directory, results_dir, budget=100):
         for i in range(1, cycles+1):
             debugging_settings.CYCLE_NUM = i
@@ -353,6 +376,7 @@ class ActiveTraining(Training):
             retinanet.eval()
             retinanet.training = False
             self._create_annotations(model=retinanet, budget=budget)
+            self._log_active_annotations_metrics(num_cycle=i)
             print("Writing created annotations images")
             results_directory = osp.join(results_dir, f"cycle_{i:02d}")
             debugging_settings.CLASSIFICATION_SCORES_PATH = osp.join(results_dir, "classification_scores")
