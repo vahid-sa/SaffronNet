@@ -145,7 +145,7 @@ class ClipBoxes(nn.Module):
         return center_alphas
 
 
-def prepare(a, b):
+def numpy_prepare(a, b):
     # extend as cols
     repetitions = b.shape[0]
     at = np.transpose([a] * repetitions)
@@ -155,7 +155,7 @@ def prepare(a, b):
     return at, bt
 
 
-def distance(ax, bx):
+def numpy_distance(ax, bx):
     """
     ax: (N) ndarray of float
     bx: (K) ndarray of float
@@ -163,7 +163,7 @@ def distance(ax, bx):
     -------
     (N, K) ndarray of distance between all x in ax, bx
     """
-    ax, bx = prepare(ax, bx)
+    ax, bx = numpy_prepare(ax, bx)
     return np.abs(ax - bx)
 
 
@@ -177,18 +177,12 @@ def compute_distance(a, b) -> Tuple[np.ndarray, np.ndarray]:
     -------
     distances: (N, K) ndarray of distance between center_alpha and query_center_alpha
     """
-    ax = a[:, 0]
-    bx = b[:, 0]
+    ax, ay, aa = a[:, 0], a[:, 1], a[:, 2]
+    bx, by, ba = b[:, 0], b[:, 1], b[:, 2]
 
-    ay = a[:, 1]
-    by = b[:, 1]
-
-    aa = a[:, 2]
-    ba = b[:, 2]
-
-    dalpha = distance(ax=aa, bx=ba)
-    dx = distance(ax=ax, bx=bx)
-    dy = distance(ax=ay, bx=by)
+    dalpha = numpy_distance(ax=aa, bx=ba)
+    dx = numpy_distance(ax=ax, bx=bx)
+    dy = numpy_distance(ax=ay, bx=by)
     dxy = np.sqrt(dx * dx + dy * dy)
 
     return dxy, dalpha
@@ -226,3 +220,52 @@ class ActiveLabelModeSTR(Enum):
     uncertain = "uncertain"
     corrected = "corrected"
     ignored = "ignored"
+
+
+def prepare(a, b):
+    # extend as cols
+    repetitions = b.shape[0]
+    at = torch.tile(a, (repetitions, 1))
+    at = at.transpose(-1, 0)
+
+    # extend as rows
+    repetitions = a.shape[0]
+    bt = torch.tile(b, (repetitions, 1))
+    return at, bt
+
+
+def distance(ax, bx):
+    """
+    ax: (N) ndarray of float
+    bx: (K) ndarray of float
+    Returns
+    -------
+    (N, K) ndarray of distance between all x in ax, bx
+    """
+    ax_prepared, bx_prepared = prepare(ax, bx)
+    dist = torch.abs(ax_prepared - bx_prepared)
+    return dist
+
+
+def calc_distance(a, b):
+    ax, ay, aa = a[:, 0], a[:, 1], a[:, 2]
+    bx, by, ba = b[:, 0], b[:, 1], b[:, 2]
+
+    dx = distance(ax=ax, bx=bx)
+    dy = distance(ax=ay, bx=by)
+    dalpha = distance(ax=aa, bx=ba)
+    dxy = torch.sqrt(dx*dx + dy*dy)
+
+    return dxy,  dalpha
+
+
+def unnormalizer(image, standardized=True):
+  mean = [0.485, 0.456, 0.406]
+  std = [0.229, 0.224, 0.225]
+  coefficient = 255.0 if standardized else 1.0
+  img = image.astype(np.float32)
+  img *= std
+  img += mean
+  img *= coefficient
+  return img.astype(np.uint8)
+    

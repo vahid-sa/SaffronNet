@@ -8,63 +8,11 @@ import torch.nn as nn
 import gc
 from os import path as osp
 from sklearn import preprocessing
+from .utils import calc_distance
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
 import debugging_settings
 from utils.visutils import draw_line
-
-
-def absolute(tensor: torch.tensor, large_matrix: bool):
-    tensor[:, :] = torch.abs(tensor[:, :])
-
-
-def prepare(a, b):
-    # extend as cols
-    repetitions = b.shape[0]
-    at = torch.tile(a, (repetitions, 1))
-    at = at.transpose(-1, 0)
-
-    # extend as rows
-    # bt = np.tile(b, (repetitions, 1))
-    repetitions = a.shape[0]
-    bt = torch.tile(b, (repetitions, 1))
-    return at, bt
-
-
-def distance(ax, bx, large_matrix: bool = False):
-    """
-    ax: (N) ndarray of float
-    bx: (K) ndarray of float
-    Returns
-    -------
-    (N, K) ndarray of distance between all x in ax, bx
-    """
-    ax_prepared, bx_prepared = prepare(ax, bx)
-    dist = torch.abs(ax_prepared - bx_prepared)
-    # absolute(tensor=dist, large_matrix=large_matrix)
-
-    return dist
-
-def calc_distance(a, b):
-    ax = a[:, 0]
-    bx = b[:, 0]
-    dx = distance(ax=ax, bx=bx)
-    del ax, bx
-
-    ay = a[:, 1]
-    by = b[:, 1]
-    dy = distance(ax=ay, bx=by)
-    del ay, by
-
-    aa = a[:, 2]
-    ba = b[:, 2]
-    dalpha = distance(ax=aa, bx=ba)
-    del aa, ba
-
-    dxy = torch.sqrt(dx*dx + dy*dy)
-    del dx, dy
-
-    return dxy,  dalpha
 
 
 class FocalLoss(nn.Module):
