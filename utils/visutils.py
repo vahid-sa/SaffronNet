@@ -204,7 +204,10 @@ class Visualizer:
         declined_predictions: list,
         annotations: list,
         write_dir: str,
+        predictions_store=None,
     ):
+        path = osp.join(write_dir, f"{image_name:03d}.jpg")
+        """
         for ann in annotations:
             x, y, alpha = int(ann[0]), int(ann[1]), int(ann[2])
             image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
@@ -214,5 +217,35 @@ class Visualizer:
         for det in accepted_predictions:
             x, y, alpha, score = det.astype(np.int64)
             image = draw_line(image, (x, y), alpha, line_color=(0, 255, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
-        path = osp.join(write_dir, f"{image_name:03d}.jpg")
+        """
+        if predictions_store is not None:
+            image = image.astype(np.float64)
+            image = np.zeros(shape=image.shape[:2], dtype=np.float64)
+            scores = np.squeeze(predictions_store['classification'])
+            regressions = np.squeeze(predictions_store['regression'])
+            anchors = np.squeeze(predictions_store['anchors'])
+            bg = scores <= 0.15
+            fg = scores >= 0.85
+            predictions = anchors.astype(np.int64)
+            x = predictions[:, 0]
+            y = predictions[:, 1]
+            print(f"image: {image.shape} | x: {x.max()} & {x.min()} & {x.shape} | y: {y.max()} & {x.min()} & {x.shape}")
+            print("anchors: {0}".format(anchors.max(axis=0)))
+            y[y == image.shape[0]] = image.shape[0] - 1
+            x[x == image.shape[1]] = image.shape[1] - 1
+            yx = np.concatenate((y[:, np.newaxis], x[:, np.newaxis]), axis=1)
+            print(yx.shape)
+            bg_yx = yx[bg]
+            print("bg_yx", bg_yx.shape, bg_yx.dtype)
+            for position in bg_yx:
+                try:
+                    image[position[0] + 5, position[1]] = 255
+                    # image[position[0], position[1]] *= 0.5
+                except IndexError:
+                    continue
+            # image[bg_yx] *= 0.5
+            # print("scores: {0} | {1}".format(scores.shape, scores.dtype))
+            # print("regressions: {0} | {1}".format(regressions.shape, regressions.dtype))
+            # print("anchors: {0} | {1}".format(anchors.shape, anchors.dtype))
+            image = image.astype(np.uint8)
         cv.imwrite(path, image)

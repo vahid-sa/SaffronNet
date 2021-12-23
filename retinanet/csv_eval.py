@@ -38,7 +38,7 @@ def _compute_ap(recall, precision):
     return ap
 
 
-def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None):
+def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100, save_path=None, predictions_stores=[]):
     """ Get the detections from the retinanet using the generator.
     The result is a list of lists such that the size is:
         all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
@@ -72,7 +72,7 @@ def _get_detections(dataset, retinanet, score_threshold=0.05, max_detections=100
             scores = scores.cpu().numpy()
             labels = labels.cpu().numpy()
             boxes = boxes.cpu().numpy()
-
+            predictions_stores.append(retinanet.module.predictions_store)
             # correct boxes for image scale
             boxes /= scale
 
@@ -141,7 +141,7 @@ def evaluate(
     max_detections=1000,
     save_path=None,
     visualizer=None,
-    write_dir=None
+    write_dir=None,
 ):
     """ Evaluate a given dataset using a given retinanet.
     # Arguments
@@ -156,9 +156,9 @@ def evaluate(
     """
 
     # gather all detections and annotations
-
+    predictions_stores = []
     all_detections = _get_detections(
-        generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
+        generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path, predictions_stores=predictions_stores)
     all_annotations = _get_annotations(generator)
 
     average_precisions = {}
@@ -206,7 +206,8 @@ def evaluate(
                 img = (img * 255).astype(np.float32)
                 img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
                 visualizer(image=img, image_name=i, accepted_predictions=acc_pred,
-                           declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir)
+                           declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir,
+                           predictions_store=predictions_stores[i])
 
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:

@@ -4,7 +4,8 @@ import torch
 from os import path as osp
 from torchvision import transforms
 from retinanet.dataloader import CSVDataset, Resizer, Normalizer
-from retinanet import csv_eval, my_model as model
+from retinanet import csv_eval, model
+from utils.visutils import Visualizer
 
 class Args:
     def __init__(self):
@@ -38,7 +39,7 @@ def main(args):
     retinanet.eval()
     # retinanet.module.freeze_bn()
 
-    print("Average precision:", csv_eval.evaluate(dataset_val, retinanet))
+    print("Average precision:", csv_eval.evaluate(dataset_val, retinanet, visualizer=Visualizer(), write_dir=osp.expanduser("~/st/Saffron/tmp/")))
 
 
 if __name__ == '__main__':
