@@ -386,9 +386,10 @@ class VGGNet(nn.Module):
         self._predictions_store['regression'] = regression.detach().cpu().numpy()
         self._predictions_store['anchors'] = anchors.detach().cpu().numpy()
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations, states, aug_img_paths, write_directory)
+            return_value = self.focalLoss(classification, regression, anchors, annotations, states, aug_img_paths, write_directory)
         else:
-            return self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
+            return_value =  self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
+        return return_value
 
 
 class BoxesModel(nn.Module):
