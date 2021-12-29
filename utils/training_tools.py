@@ -54,11 +54,12 @@ class Training:
         os.makedirs(osp.dirname(self._metrics_path), exist_ok=True)
 
     def _reset_memory(self):
+        return
         torch.cuda.reset_max_memory_allocated(device=torch.device(self._device))
         torch.cuda.reset_max_memory_cached(device=torch.device(self._device))
         torch.cuda.reset_peak_memory_stats(device=torch.device(self._device))
-        torch.cuda.empty_cache()
-        gc.collect()
+        # torch.cuda.empty_cache()
+        # gc.collect()
 
     def _load_training_data(self, loader_directory=None):
         dataset_train = dataloader.CSVDataset(
@@ -204,13 +205,6 @@ class Training:
                         loss_value,
                     )
                 )
-
-                del classification_loss
-                del xydistance_regression_loss
-                del angle_distance_regression_losses
-                del loss
-                del params
-
             mAP = self._evaluate(model=retinanet)
             mean_epoch_loss = np.mean(epoch_loss)
             print(
@@ -362,6 +356,7 @@ class ActiveTraining(Training):
             "num_new_labels": num_labeled,
             "num_higher_half_queries": num_higher_than_half_queries,
             "num_lower_half_queries": num_lower_than_half_queries,
+            "num_images": num_images,
         }
         self._metrics["annotations"].append(metrics)
         # written in parent

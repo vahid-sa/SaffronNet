@@ -3,8 +3,9 @@ import json
 import numpy as np
 from os import path as osp
 from matplotlib import pyplot as plt
+from copy import deepcopy
 
-path = "/run/user/1000/gvfs/smb-share:server=172.17.3.145,share=st_saeedi97/Saffron/metrics.json"
+path = "/home/vahid/metrics.json"
 
 f = open(path, "r")
 string = f.read()
@@ -31,6 +32,21 @@ for cyl in cycles:
     axs[1].axvline(cyl * len(epochs))
     axs[2].axvline(cyl * len(epochs))
     # axs[3].axvline(cyl * len(epochs))
+
 fig.suptitle("metrics")
+fig.show()
+plt.show()
+
+
+counts = {key: [dic[key] for dic in metrics['annotations']] for key in metrics['annotations'][0]}
+nnl = deepcopy(counts["num_new_labels"])
+nnl.pop(-1)
+nnl.insert(0, 0)
+counts["num_new_labels"] = [c - n for c, n in zip(counts["num_new_labels"], nnl)]
+fig, axs = plt.subplots(3, 1, figsize=(12, 4))
+axs[0].bar(x=counts['num_cycle'], height=counts['num_new_labels'])
+axs[1].bar(x=counts['num_cycle'], height=counts['num_higher_half_queries'])
+axs[1].bar(x=counts['num_cycle'], height=counts['num_lower_half_queries'])
+fig.suptitle("counts")
 fig.show()
 plt.show()
