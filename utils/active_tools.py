@@ -1,319 +1,201 @@
-import os
-import shutil
 import logging
 import numpy as np
 import csv
-import glob
-import json
-from cv2 import cv2
 from os import path as osp
 
-from retinanet.utils import ActiveLabelMode, load_classes, ActiveLabelModeSTR
+from retinanet.model import VGGNet
+from retinanet.utils import load_classes
 from utils.prediction import detect
+from retinanet import dataloader
+from prediction import imageloader
 
 
 class Active:
-    def __init__(self, loader, states_dir, radius, image_string_file_numbers_path=None, supervised_annotations_path=None):
+    def __init__(
+        self,
+        loader: imageloader.CSVDataset,
+        annotations_path: str,
+        class_list_path: str,
+        budget: int = 2,
+        aggregator_type: str = "max",
+        uncertainty_algorithm: str = "least",
+    ):
         self._NAME, self._X, self._Y, self._ALPHA, self._LABEL, self._SCORE = 0, 1, 2, 3, 4, 5
         self._loader = loader
-        self._states_dir = states_dir
-        self._states = self._init_states()
-        self._radius = radius
-        self._boxes = None
-        self._uncertain_indices = None
-        self._noisy_indices = None
-        self._gt_annotations = None
-        self._active_annotations = None
-        self._write_supervised_data = False if ((image_string_file_numbers_path is None) or (supervised_annotations_path is None)) else True
-        self._supervised_string_file_numbers = Active._load_supervised_string_file_numbers(string_file_number_path=image_string_file_numbers_path) if self._write_supervised_data else None
-        self._supervised_annotations_path = supervised_annotations_path if self._write_supervised_data else None
+        self._aggregator_type = aggregator_type
+        self._uncertainty_algorithm = uncertainty_algorithm
+        self._budget = budget
+        self._annotations_path = annotations_path
+        self._class_list_path = class_list_path
 
-        if osp.isdir(self._states_dir):
-            shutil.rmtree(self._states_dir)
-        os.makedirs(self._states_dir, exist_ok=False)
+        self._boxes: np.ndarray = None
+        self._uncertain_image_list: np.ndarray = None
 
-    def _init_states(self):
-        img_pattern = cv2.imread(osp.join(self._loader.img_dir, self._loader.image_names[0] + self._loader.ext))
-        states = np.full(
-            shape=(len(self._loader.image_names), img_pattern.shape[0], img_pattern.shape[1]),
-            fill_value=False,
-            dtype=np.bool_,
-        )
-        return states
-
-    def _load_previous_states(self):
-        paths = glob.glob(osp.join(self._states_dir, "*.npy"))
-        for path in paths:
-            f = open(path, "rb")
-            state = np.load(f)
-            f.close()
-            name = osp.splitext(osp.basename(path))[0]
-            if self._supervised_string_file_numbers is not None:
-                if name in self._supervised_string_file_numbers:
-                    continue  # This state is for supervised data and will be written in a different function in current states dir
-            index = self._loader.image_names.index(name)
-            self._states[index, :, :] = state
-
-    @staticmethod
-    def _load_supervised_string_file_numbers(string_file_number_path):
-        fileIO = open(string_file_number_path, "r")
-        string = fileIO.read()
+    def _load_annotations(self) -> np.ndarray:
+        class_to_index, _ = load_classes(csv_class_list_path=self._class_list_path)
+        fileIO = open(self._annotations_path, "r")
+        annotations = list()
+        for row in csv.reader(fileIO):
+            annotation = [None] * 5
+            annotation[self._NAME] = int(row[self._NAME])
+            annotation[self._X] = int(float(row[self._X]))
+            annotation[self._Y] = int(float(row[self._Y]))
+            annotation[self._ALPHA] = int(float(row[self._ALPHA]))
+            annotation[self._LABEL] = class_to_index[row[self._LABEL]]
+            annotations.append(annotation)
         fileIO.close()
-        dictionary = json.loads(string)
-        supervised_string_file_numbers = dictionary['supervised']
-        return supervised_string_file_numbers
-
-    def _predict_boxes(self, model):
-        self._boxes = detect(dataset=self._loader, retinanet_model=model)
-        self._boxes[:, [self._X, self._Y, self._ALPHA]] = np.around(self._boxes[:, [self._X, self._Y, self._ALPHA]])
-
-    def _select_uncertain_boxes(self, budget):
-        indices = list()
-        scores = np.abs(self._boxes[:, self._SCORE] - 0.5)
-        sorted_indices = scores.argsort()
-        sorted_boxes = self._boxes[sorted_indices]
-        i = -1
-        while len(indices) < budget:
-            i += 1
-            if i >= len(sorted_boxes):
-                break
-            box = sorted_boxes[i]
-            position = self._loader.image_names.index(f"{int(box[self._NAME]):03d}")
-            x, y = int(box[self._X]), int(box[self._Y])
-            try:
-                state = self._states[position, y, x]
-            except IndexError:
-                logging.error("Index out of range error", exc_info=True)
-                continue
-            if not state:
-                indices.append(sorted_indices[i])
-        self._uncertain_indices = indices
-
-    def _select_ground_truth_states(self):
-        for box in self._boxes[self._uncertain_indices]:
-            name, x, y = int(box[self._NAME]), int(box[self._X]), int(box[self._Y])
-            position = int(self._loader.image_names.index(f"{name:03d}"))
-            r = self._radius
-            self._states[position, y-r:y+r, x-r:x+r] = True
-
-    @staticmethod
-    def _get_ground_truth_annotations(dataloader, index):
-        img = cv2.imread(dataloader.image_names[index])
-        rows, cols = img.shape[0], img.shape[1]
-        annotations = dataloader[index]["annot"].cpu().detach().numpy()
-        is_valid = np.logical_and((annotations[:, 0] < cols), (annotations[:, 1] < rows))
-        annotations = annotations[is_valid]
+        annotations = np.asarray(annotations, dtype=np.float32)
         return annotations
 
+    def _predict_boxes(self, model: VGGNet) -> np.ndarray:
+        boxes = detect(dataset=self._loader, retinanet_model=model)
+        boxes[:, [self._X, self._Y, self._ALPHA]] = np.around(boxes[:, [self._X, self._Y, self._ALPHA]])
+        return boxes
+
     @staticmethod
-    def _correct_uncertains(annotations, uncertainty_state):
-        X, Y = 0, 1
-        gt_yx = annotations[:, Y].astype(np.int64), annotations[:, X].astype(np.int64)
-        status = uncertainty_state[gt_yx]
-        in_uncertain_gt_indices = np.squeeze(np.argwhere(status), axis=-1)
-        in_uncertain_gt_annotations = annotations[in_uncertain_gt_indices]
-        return in_uncertain_gt_annotations
+    def _calculate_least_confidence_scores(classification_scores: np.ndarray) -> np.ndarray:
+        """calculates least confidence score for each element(box)
 
-    def _correct(self, dataloader):
-        corrected_annotations = []
-        for i in range(len(dataloader.image_names)):
-            uncertainty_state = self._states[i]
-            gt_annotations = Active._get_ground_truth_annotations(dataloader=dataloader, index=i)
-            if len(gt_annotations) == 0:
-                continue
-            in_uncertain_gt_annotations = Active._correct_uncertains(
-                annotations=gt_annotations,
-                uncertainty_state=uncertainty_state,
-            )
-            img_number = int(osp.splitext(osp.basename(dataloader.image_names[i]))[0])
-            img_number_col = np.full(shape=(in_uncertain_gt_annotations.shape[0], 1), fill_value=img_number)
-            in_uncertain_gt_annotations = np.concatenate([img_number_col, in_uncertain_gt_annotations], axis=1)
-            corrected_annotations.extend(in_uncertain_gt_annotations.tolist())
-        corrected_annotations = np.asarray(corrected_annotations)
-        self._gt_annotations = corrected_annotations
+        Args:
+            classification_scores (np.ndarray): (N,) 0 < score < 1
 
-    def _select_noisy_boxes(self):
-        indices = list()
-        uncertain_boxes = self._boxes[self._uncertain_indices]
-        uncertain_scores = uncertain_boxes[:, self._SCORE]
-        maximum_uncertain_score = np.max(uncertain_scores)
-        higher_than_uncertain_score_indices = np.squeeze(np.argwhere(self._boxes[:, self._SCORE] > maximum_uncertain_score))
-        logging.debug(f"states shape: {self._states.shape}")
-        for i in higher_than_uncertain_score_indices:
-            box = self._boxes[i]
-            name, x, y = int(box[self._NAME]), int(box[self._X]), int(box[self._Y])
-            position = int(self._loader.image_names.index(f"{name:03d}"))
-            try:
-                state = self._states[position, y, x]
-            except IndexError:
-                logging.error("Index out of range error", exc_info=True)
-                continue
-            if (not state) and (True in self._states[position, :, :]):
-                indices.append(i)
-        self._noisy_indices = indices
+        Returns:
+            np.ndarray: (N,) 0 < least confidence scores < 1
+        """
+        distance = np.abs(np.subtract(classification_scores, 0.5))
+        least_confidence_scores = np.subtract(1.0, distance)
+        return least_confidence_scores
 
-    def _concat_noisy_and_corrected_boxes(self):
-        noisy_boxes = self._boxes[self._noisy_indices]
-        corrected_boxes = self._gt_annotations[:, :5]
-        corrected_col = np.full(shape=(corrected_boxes.shape[0], 1), fill_value=ActiveLabelMode.corrected.value, dtype=corrected_boxes.dtype)
-        corrected_boxes = np.concatenate([corrected_boxes, corrected_col], axis=1)
+    @staticmethod
+    def _calculate_binary_cross_entropy_scores(classification_scores: np.ndarray) -> np.ndarray:
+        """calculates least confidence score for each element(box)
 
-        noisy_boxes = noisy_boxes[:, :5]
-        noisy_col = np.full(shape=(noisy_boxes.shape[0], 1), fill_value=ActiveLabelMode.noisy.value, dtype=noisy_boxes.dtype)
-        noisy_boxes = np.concatenate([noisy_boxes, noisy_col], axis=1)
+        Args:
+            classification_scores (np.ndarray): (N,) 0 < score < 1
 
-        active_annotations = np.concatenate([corrected_boxes, noisy_boxes], axis=0)
-        active_annotations = active_annotations[active_annotations[:, 0].argsort(), :]
-        self._active_annotations = active_annotations
+        Returns:
+            np.ndarray: (N,) 0 < binary cross entropy scores < 1
+        """
+        complement = np.subtract(1.0, classification_scores)
+        entropy = np.multiply(classification_scores, np.log(classification_scores))
+        complement_entropy = np.multiply(complement, np.log(complement))
+        neg_bce = np.add(entropy, complement_entropy)
+        bce = np.negative(neg_bce)
+        return bce
 
-    def _write_states(self):
-        if osp.isdir(self._states_dir):
-            shutil.rmtree(self._states_dir)
-        os.makedirs(self._states_dir, exist_ok=False)
-        for i in range(self._states.shape[0]):
-            states = self._states[i]
-            name = self._loader.image_names[i] + ".npy"
-            path = osp.join(self._states_dir, name)
-            with open(path, "wb") as f:
-                np.save(file=f, arr=states)
-        if self._supervised_string_file_numbers is not None:
-            img_state_shape = self._states[0].shape
-            states = np.full(fill_value=True, dtype=self._states.dtype, shape=img_state_shape)
-            for num in self._supervised_string_file_numbers:
-                name = num + ".npy"
-                path = osp.join(self._states_dir, name)
-                with open(path, "wb") as f:
-                    np.save(file=f, arr=states)
+    @staticmethod
+    def _calculate_random_scores(classification_scores: np.ndarray) -> np.ndarray:
+        """samples a random score for each element(box)
 
-    def _write_ground_truth_annotations(self, ground_truth_path, class_list_path):
-        IMG, X, Y, ALPHA, LABEL = 0, 1, 2, 3, 4
-        os.makedirs(osp.dirname(ground_truth_path), exist_ok=True)
-        f = open(ground_truth_path, 'w')
-        csv_writer = csv.writer(f, delimiter=',')
-        _, index_to_class = load_classes(csv_class_list_path=class_list_path)
-        for annotation in self._gt_annotations:
-            img_number, x, y, alpha, label = annotation[[IMG, X, Y, ALPHA, LABEL]].astype(np.int64)
-            img_name = format(img_number, "03d")
-            label_name = index_to_class[str(label)]
-            row = [img_name, x, y, alpha, label_name]
-            csv_writer.writerow(row)
-        f.close()
+        Args:
+            classification_scores (np.ndarray): (N,)
 
-    def _write_active_annotations(self, path, class_list_path):
-        IMG, X, Y, ALPHA, LABEL, STATUS = 0, 1, 2, 3, 4, 5
-        os.makedirs(osp.dirname(path), exist_ok=True)
-        fileIO = open(path, "w")
-        writer = csv.writer(fileIO)
-        class_to_index, index_to_class = load_classes(csv_class_list_path=class_list_path)
-        if len(self._active_annotations) > 0:
-            active_annotations = self._active_annotations[:, [IMG, X, Y, ALPHA, LABEL, STATUS]].astype(np.int64)
-            if self._supervised_annotations_path is not None:
-                supervised_annotations = []
-                file_reader = open(self._supervised_annotations_path, "r")
-                csv_reader = csv.reader(file_reader, delimiter=',')
-                for row in csv_reader:
-                    img_name = int(row[0])
-                    x = int(float(row[1]))
-                    y = int(float(row[2]))
-                    alpha = int(float(row[3]))
-                    label = class_to_index[row[4]]
-                    annotation = [img_name, x, y, 90 - alpha, label, ActiveLabelMode.corrected.value]
-                    supervised_annotations.append(annotation)
-                file_reader.close()
-                supervised_annotations = np.asarray(supervised_annotations, dtype=np.int64)
-                logging.debug(
-                    "active annotations: {0} {1}\nsupervised annotations: {2} {3}".format(
-                        active_annotations.shape, active_annotations.dtype, supervised_annotations.shape, supervised_annotations.dtype,
-                        ),
-                    )
-                active_annotations = np.concatenate([active_annotations, supervised_annotations], axis=0)
-                active_annotations = active_annotations[active_annotations[:, IMG].argsort()]
+        Returns:
+            np.ndarray: (N,) 0 < random value < 1
+        """
+        scores = np.random.uniform(size=classification_scores.shape)
+        return scores
+
+    def _calculate_image_uncertainty_score(self, predicted_boxes):
+        if self._aggregator_type == "max":
+            aggregator = np.max
+        elif self._aggregator_type == "avg":
+            aggregator = np.mean
+        elif self._aggregator_type == "sum":
+            aggregator = np.sum
         else:
-            active_annotations = self._active_annotations
-        for annotation in active_annotations:
-            img_number, x, y, alpha, label, status = annotation
-            img_name = format(img_number, "03d")
-            label_name = index_to_class[str(label)]
-            if status == ActiveLabelMode.corrected.value:
-                status_name = ActiveLabelModeSTR.gt.value
-            elif status == ActiveLabelMode.noisy.value:
-                status_name = ActiveLabelModeSTR.noisy.value
-            else:
-                raise ValueError(f"'{status} is not a correct value'")
-            row = [img_name, x, y, 90 - alpha, label_name, status_name]
+            raise AssertionError("Incorrect input argument 'type'")
+        if self._uncertainty_algorithm == "least":
+            calculator = Active._calculate_least_confidence_scores
+        elif self._uncertainty_algorithm == "bce":
+            calculator = Active._calculate_binary_cross_entropy_scores
+        elif self._uncertainty_algorithm == "random":
+            calculator = Active._calculate_random_scores
+            aggregator = np.mean
+        else:
+            raise AssertionError("Incorrect input argument 'algorithm'")
+        uncertainty_scores = calculator(predicted_boxes[:, self._SCORE])
+        boxes_names = predicted_boxes[:, self._NAME]
+        img_names = np.unique(boxes_names)
+        image_uncertainty_scores = [
+            [
+                img_name,
+                aggregator(uncertainty_scores[boxes_names == img_name]),
+            ] for img_name in img_names
+        ]
+        return np.asarray(image_uncertainty_scores, dtype=np.float64)
+
+    def _select_uncertain_images(self, annotated_img_names: list, img_uncertainty_scores: np.ndarray) -> list:
+        not_selected_before = np.in1d(img_uncertainty_scores[:, 0], annotated_img_names, invert=True)
+        not_selected_img_uncertainty_scores = img_uncertainty_scores[not_selected_before]
+        if len(not_selected_img_uncertainty_scores) == 0:
+            uncertain_img_names =  []
+        else:
+            sorted_img_uncertainty_scores = not_selected_img_uncertainty_scores[np.argsort(not_selected_img_uncertainty_scores[:, 1])[::-1]]
+            uncertain_img_names = sorted_img_uncertainty_scores[:self._budget, 0].tolist()
+        return uncertain_img_names
+
+    @staticmethod
+    def _label_uncertain_images(uncertain_img_names: list, dataloader: dataloader.CSVDataset) -> np.ndarray:
+        loader_image_paths = dataloader.image_names
+        loader_image_names = [int(osp.basename(osp.splitext(path)[0])) for path in loader_image_paths]
+        annotations = []
+        for img_name in uncertain_img_names:
+            index =  loader_image_names.index(img_name)
+            image_annotations = dataloader[index]["annot"].numpy()
+            image_annotations = np.hstack([
+                np.full(shape=(image_annotations.shape[0], 1), dtype=image_annotations.dtype, fill_value=img_name),
+                image_annotations,
+                ])
+            annotations.extend(image_annotations.tolist())
+        return np.asarray(annotations, dtype=np.float32)
+
+    def _write_annotations(self, annotations: np.ndarray):
+        _, index_to_class = load_classes(csv_class_list_path=self._class_list_path)
+        fileIO = open(self._annotations_path, "w")
+        writer = csv.writer(fileIO)
+        annots = annotations
+        for annot in annots:
+            row = [None] * 5
+            row[self._NAME] = f"{int(annot[self._NAME]):03d}"
+            row[self._X] = str(float(annot[self._X]))
+            row[self._Y] = str(float(annot[self._Y]))
+            row[self._ALPHA] = str(float(annot[self._ALPHA]))
+            row[self._LABEL] = index_to_class[str(int(annot[self._LABEL]))]
             writer.writerow(row)
         fileIO.close()
 
-    def create_active_annotations(
-            self,
-            model,
-            budget,
-            ground_truth_loader,
-            ground_truth_annotations_path,
-            active_annotations_path,
-            classes_list_path,
+    def create_annotations(
+        self,
+        ground_truth_dataloader: dataloader.CSVDataset,
+        model: VGGNet,
     ):
-        self._boxes = None
-        self._uncertain_indices = None
-        self._noisy_indices = None
-        self._gt_annotations = None
-        self._active_annotations = None
-        self._states = self._init_states()
-
-        logging.info("Loading previos states...")
-        self._load_previous_states()
-        logging.info("Predicting boxes...")
-        self._predict_boxes(model=model)
-        logging.info("Selecting uncertain boxes...")
-        self._select_uncertain_boxes(budget=budget)
-        logging.info("Selecting ground truth states...")
-        self._select_ground_truth_states()
-        logging.info("Correcting uncertain boxes...")
-        self._correct(dataloader=ground_truth_loader)
-        logging.info("Selecting noisy boxes...")
-        self._select_noisy_boxes()
-        logging.info("Creating active annotations...")
-        self._concat_noisy_and_corrected_boxes()
-        logging.info("Writing...")
-        self._write_states()
-        self._write_ground_truth_annotations(
-            ground_truth_path=ground_truth_annotations_path,
-            class_list_path=classes_list_path,
-        )
-        self._write_active_annotations(
-            path=active_annotations_path,
-            class_list_path=classes_list_path,
-        )
-        logging.info("Creating active annotations Done!")
+        predicted_boxes = self._predict_boxes(model=model)
+        self._boxes = predicted_boxes
+        img_uncertainty_scores = self._calculate_image_uncertainty_score(predicted_boxes=predicted_boxes)
+        if osp.isfile(self._annotations_path):
+            previous_annotations = self._load_annotations()
+            annotated_img_names = previous_annotations[:, 0]
+        else:
+            previous_annotations = np.asarray([], dtype=np.float32)
+            annotated_img_names = np.asarray([], dtype=np.float32)
+        uncertain_img_names = self._select_uncertain_images(annotated_img_names=annotated_img_names, img_uncertainty_scores=img_uncertainty_scores)
+        new_annotations = Active._label_uncertain_images(uncertain_img_names=uncertain_img_names, dataloader=ground_truth_dataloader)
+        self._uncertain_image_list = np.unique(new_annotations[:, 0].astype(np.int64)).tolist()
+        if len(previous_annotations) and len(new_annotations):
+            annotations = np.concatenate([previous_annotations, new_annotations], axis=0)
+        elif len(new_annotations):
+            annotations = new_annotations
+        elif len(previous_annotations):
+            annotations = previous_annotations
+        else:
+            annotations = np.asarray([], dtype=np.float64)
+        self._write_annotations(annotations=annotations)
 
     @property
-    def states(self):
-        return self._states
-
-    @property
-    def predictions(self):
+    def predictions(self) -> np.ndarray:
         return self._boxes
 
     @property
-    def uncertain_predictions(self):
-        if (self._boxes is None) or (self._uncertain_indices is None):
-            value = None
-        else:
-            value = self._boxes[self._uncertain_indices]
-        return value
-
-    @property
-    def noisy_predictions(self):
-        if (self._boxes is None) or (self._noisy_indices is None):
-            value = None
-        else:
-            value = self._boxes[self._noisy_indices]
-        return value
-
-    @property
-    def active_annotations(self):
-        return self._active_annotations
-
-    @property
-    def ground_truth_annotations(self):
-        return self._gt_annotations
+    def uncertain_images(self) -> list:
+        return self._uncertain_image_list
