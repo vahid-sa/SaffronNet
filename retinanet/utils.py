@@ -259,7 +259,7 @@ def calc_distance(a, b):
     return dxy,  dalpha
 
 
-def unnormalizer(image, standardized=True):
+def unnormalizer(image: np.ndarray, standardized: bool = True) -> np.ndarray:
   mean = [0.485, 0.456, 0.406]
   std = [0.229, 0.224, 0.225]
   coefficient = 255.0 if standardized else 1.0

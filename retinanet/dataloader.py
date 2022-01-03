@@ -14,7 +14,6 @@ from torch.utils.data import Dataset
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
-from imgaug.augmentables.segmaps import SegmentationMapsOnImage
 from utils.visutils import DrawMode, draw_line, get_alpha, get_dots, std_draw_line, std_draw_points, normalize_alpha
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
@@ -28,7 +27,7 @@ import skimage.transform
 import skimage.color
 import random
 import skimage
-from cv2 import cv2 as cv
+import cv2 as cv
 
 from PIL import Image
 from .settings import NUM_VARIABLES
@@ -146,7 +145,7 @@ class CocoDataset(Dataset):
 class CSVDataset(Dataset):
     """CSV dataset."""
 
-    def __init__(self, train_file, class_list, images_dir, ground_truth_states_directory=None, image_extension=".jpg", transform=None, save_output_img_directory=None):
+    def __init__(self, train_file, class_list, images_dir, image_extension=".jpg", transform=None, save_output_img_directory=None):
         """
         Args:
             train_file (string): CSV file with training annotations
@@ -184,7 +183,6 @@ class CSVDataset(Dataset):
             raise(ValueError(
                 'invalid CSV annotations file: {}: {}'.format(self.train_file, e)))
         self.image_names = list(self.image_data.keys())
-        self.gt_states_dir = ground_truth_states_directory
 
     def _parse(self, value, function, fmt):
         """
@@ -247,37 +245,17 @@ class CSVDataset(Dataset):
     def __getitem__(self, idx):
         img = self.load_image(idx)
         annot = self.load_annotations(idx)
-        gt_state = self.load_state(idx)
         original_annot = annot.copy()
-        original_state = np.logical_not(gt_state.astype(np.bool_))
-        sample = {'img': img, 'annot': annot, 'gt_state': gt_state}
+        sample = {'img': img, 'annot': annot}
         if self.transform:
             sample = self.transform(sample)
-        sample['gt_state'] = torch.logical_not(sample['gt_state'].type(torch.BoolTensor))
         sample['orig_annot'] = original_annot
-        sample['orig_state'] = original_state
         if self.save_output_img_directory is None:
             sample['aug_img_path'] = None
         else:
             aug_img_path = self.write_img(img=sample["img"], idx=idx)
             sample['aug_img_path'] = aug_img_path
         return sample
-
-    def load_state(self, index):
-        if self.gt_states_dir is None:
-            img = self.load_image(index)
-            state = np.ones(shape=(img.shape[0], img.shape[1], 1), dtype=np.uint8)
-        else:
-            str_number = os.path.splitext(os.path.basename(self.image_names[index]))[0]
-            name = str_number + '.npy'
-            path = os.path.join(self.gt_states_dir, name)
-            fileIO = open(path, "rb")
-            state = np.load(fileIO)
-            fileIO.close()
-            state = np.expand_dims(state, axis=-1)
-            state = np.logical_not(state)
-            state = state.astype(np.uint8)
-        return state
 
     def load_image(self, image_index):
         img = cv.imread(self.image_names[image_index])
@@ -289,19 +267,10 @@ class CSVDataset(Dataset):
 
         return img.astype(np.float32)/255.0
 
-    def __active_status_string_to_int(self, str_status: str) -> utils.ActiveLabelMode:
-        if str_status == utils.ActiveLabelModeSTR.gt.value:
-            int_status = utils.ActiveLabelMode.corrected.value
-        elif str_status == utils.ActiveLabelModeSTR.noisy.value:
-            int_status = utils.ActiveLabelMode.noisy.value
-        else:
-            raise AssertionError("truth_status field can be 'ground_truth' or 'predicted' ")
-        return int_status
-
     def load_annotations(self, image_index):
         # get ground truth annotations
         annotation_list = self.image_data[self.image_names[image_index]]
-        annotations = np.zeros((0, NUM_VARIABLES+2))
+        annotations = np.zeros((0, NUM_VARIABLES+1))
 
         # some images appear to miss annotations (like image with id 257034)
         if len(annotation_list) == 0:
@@ -313,19 +282,16 @@ class CSVDataset(Dataset):
             ctr_x = a['x']
             ctr_y = a['y']
             alpha = normalize_alpha(90 - a['alpha'])
-            ground_truth_status = a["ground_truth"]
-
             # if (x2-x1) < 1 or (y2-y1) < 1:
             #     continue
 
-            annotation = np.zeros((1, NUM_VARIABLES+2))
+            annotation = np.zeros((1, NUM_VARIABLES+1))
 
             annotation[0, 0] = ctr_x
             annotation[0, 1] = ctr_y
             annotation[0, 2] = alpha
 
             annotation[0, 3] = self.name_to_label(a['class'])
-            annotation[0, 4] = ground_truth_status
             annotations = np.append(annotations, annotation, axis=0)
 
         return annotations
@@ -338,9 +304,6 @@ class CSVDataset(Dataset):
             try:
                 if len(row) == 5:
                     img_id, ctr_x, ctr_y, alpha, class_name = row[:5]
-                    label_status = utils.ActiveLabelModeSTR.gt.value
-                elif len(row) > 5:
-                    img_id, ctr_x, ctr_y, alpha, class_name, label_status = row[:6]
                 else:
                     raise AssertionError("Annotation format is not correct.")
             except ValueError:
@@ -364,15 +327,13 @@ class CSVDataset(Dataset):
             alpha = self._parse(
                 float(alpha), int, 'line {}: malformed alpha: {{}}'.format(line))
 
-            ground_truth = self.__active_status_string_to_int(label_status)
-
             # check if the current class name is correctly present
             if class_name not in classes:
                 raise ValueError('line {}: unknown class name: \'{}\' (classes: {})'.format(
                     line, class_name, classes))
 
             result[img_file].append(
-                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name, 'ground_truth': ground_truth})
+                {'x': ctr_x, 'y': ctr_y, 'alpha': alpha, 'class': class_name})
 
         return result
 
@@ -391,11 +352,9 @@ class CSVDataset(Dataset):
 
 
 def collater(data):
-
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
     scales = [s['scale'] for s in data]
-    states = [s['gt_state'].detach().cpu().tolist() for s in data]
     aug_img_path = [s['aug_img_path'] for s in data]
 
     widths = [int(s.shape[0]) for s in imgs]
@@ -428,11 +387,7 @@ def collater(data):
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
 
-    states = np.asarray(states, dtype=np.bool_)
-    device = data[0]['gt_state'].device
-    states = torch.from_numpy(states).to(device)
-
-    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales, 'gt_state': states, 'aug_img_path': aug_img_path}
+    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales, 'aug_img_path': aug_img_path}
 
 
 class Resizer(object):
@@ -441,7 +396,7 @@ class Resizer(object):
     """
 
     def __call__(self, sample, min_side=608, max_side=1024):
-        image, annots, gt_state = sample['img'], sample['annot'], sample['gt_state']
+        image, annots = sample['img'], sample['annot']
 
         rows, cols, cns = image.shape
 
@@ -461,8 +416,6 @@ class Resizer(object):
         # resize the image with the computed scale
         image = skimage.transform.resize(
             image, (int(round(rows*scale)), int(round((cols*scale)))))
-        gt_state = skimage.transform.resize(
-            gt_state, (int(round(rows * scale)), int(round((cols * scale)))))
         rows, cols, cns = image.shape
 
         pad_w = 32 - rows % 32
@@ -472,15 +425,12 @@ class Resizer(object):
             (rows + pad_w, cols + pad_h, cns)).astype(np.float32)
         new_image[:rows, :cols, :] = image.astype(np.float32)
 
-        new_gt_state = np.zeros((rows + pad_w, cols + pad_h, 1)).astype(np.float32)
-        new_gt_state[:rows, :cols, :] = gt_state.astype(np.float32)
         annots[:, :NUM_VARIABLES] *= scale
 
         return {
             'img': torch.from_numpy(new_image),
             'annot': torch.from_numpy(annots),
             'scale': scale,
-            'gt_state': torch.from_numpy(new_gt_state),
         }
 
 
@@ -506,7 +456,6 @@ class Augmenter(object):
 
         if np.random.rand() < aug:
             image, annots = sample['img'], sample['annot']
-            gt_state = np.squeeze(sample["gt_state"]).astype(np.bool_)
 
             new_annots = annots.copy()
             kps = []
@@ -515,15 +464,7 @@ class Augmenter(object):
                 kps.append(Keypoint(x=x0, y=y0))
                 kps.append(Keypoint(x=x1, y=y1))
             kpsoi = KeypointsOnImage(kps, shape=image.shape)
-
-            segmap = SegmentationMapsOnImage(gt_state, shape=image.shape)
-            image_aug, kpsoi_aug, gt_state_aug = self.seq(image=image, keypoints=kpsoi, segmentation_maps=segmap)
-            gt_state_aug = np.squeeze(np.array(gt_state_aug.draw(size=gt_state.shape)))
-            gt_state_aug = cv2.cvtColor(gt_state_aug, cv2.COLOR_BGR2GRAY)
-            gt_state_aug = np.expand_dims(gt_state_aug, axis=-1)
-            """
-            Might be need to reverse 0, and 1 in gt_state, so that new values in gt_state_aug remind ground_truth
-            """
+            image_aug, kpsoi_aug = self.seq(image=image, keypoints=kpsoi)
             for i, _ in enumerate(kpsoi_aug.keypoints):
                 if i % 2 == 1:
                     continue
@@ -546,7 +487,6 @@ class Augmenter(object):
             sample = {
                 'img': image_aug,
                 'annot': new_annots,
-                'gt_state': gt_state_aug,
             }
 
         return sample
@@ -561,8 +501,8 @@ class Normalizer(object):
         self.std = np.array([[[0.229, 0.224, 0.225]]])
 
     def __call__(self, sample):
-        image, annots, gt_state = sample['img'], sample['annot'], sample['gt_state']
-        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots, 'gt_state': gt_state}
+        image, annots = sample['img'], sample['annot']
+        return {'img': ((image.astype(np.float32) - self.mean) / self.std), 'annot': annots}
 
 
 class UnNormalizer(object):
