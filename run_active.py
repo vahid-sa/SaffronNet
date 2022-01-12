@@ -29,9 +29,11 @@ class parser:
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
-    budget = 100
+    budget = 2
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
+    aggregator_type="max"  # avg, sum
+    uncertainty_algorihm="least"  # bce, random
 
     @staticmethod
     def reset():
@@ -50,31 +52,28 @@ class parser:
         os.makedirs(parser.save_models_directory, exist_ok=False)
         if osp.isfile(parser.metrics_path):
             os.remove(parser.metrics_path)
+        shutil.copyfile(osp.abspath("./annotations/supervised.csv"), parser.active_annotations)
 
 
 def main():
     parser.reset()
     active_trainer = ActiveTraining(
-        active_annotations_path=parser.active_annotations,
-        corrected_annotations_path=parser.corrected_annotations,
+        annotations_path=parser.active_annotations,
         validation_file_path=parser.csv_val,
-        groundtruth_annotations_path=parser.ground_truth_annotations,
+        oracle_annotations_path=parser.ground_truth_annotations,
         classes_path=parser.csv_classes,
-        states_dir=parser.states_dir,
         images_dir=parser.images_dir,
-        metrics_path=parser.metrics_path,
-        supervised_annotations_path=parser.supervised_annotations,
         filenames_path=parser.filenames,
-        epochs=parser.epochs,
+        aggregator_type=parser.aggregator_type,
+        uncertainty_alorithm=parser.uncertainty_algorihm,
+        budget=parser.budget,
+        metrics_path=parser.metrics_path,
     )
     active_trainer.run_cycle(
         cycles=parser.cycles,
         init_state_dict_path=parser.state_dict_path,
         models_directory=parser.save_models_directory,
-        results_dir=parser.save_directory,
-        budget=parser.budget,
     )
-
 
 if __name__ == "__main__":
     main()

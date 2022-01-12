@@ -1,24 +1,20 @@
 import os
-import logging
 import json
 import numpy as np
 from cv2 import cv2
 import torch
 import torch.nn as nn
-import gc
 from os import path as osp
-from sklearn import preprocessing
 from .utils import calc_distance
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
-import debugging_settings
 from utils.visutils import draw_line
 
 
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations, states, img_paths, write_directory=None):
+    def forward(self, classifications, regressions, anchors, annotations):
         alpha = 0.95
         gamma = 2.0
         predictions = torch.add(anchors, regressions)
@@ -34,24 +30,11 @@ class FocalLoss(nn.Module):
         # print(f"x: {anchor_ctr_x.max()}\ny: {anchor_ctr_y.max()}\na: {anchor_alpha.max()}")
         for j in range(batch_size):
             classification = classifications[j, :, :]
-            with open(debugging_settings.CLASSIFICATION_SCORES_PATH, "a") as f:
-                hist, _ = np.histogram(classification.detach().cpu().numpy(), bins=10, range=(0.0, 1.0))
-                f.write(json.dumps({"cycle": debugging_settings.CYCLE_NUM, "epoch": debugging_settings.EPOCH_NUM, "scores": hist.tolist()}))
             regression = regressions[j, :, :]
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
                 center_alpha_annotation[:, NUM_VARIABLES] != -1]
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
-            state = states[j, :, :, :]
-            prediction = predictions[j, :, :]
-            gt_map = FocalLoss.set_noisy_anchors(state=state, anchor=anchor)
-            # img = torch.zeros(size=(state.shape[:2]), dtype=torch.uint8)
-            true_indices = anchor[gt_map].to(dtype=torch.int64, device='cpu')
-            true_indices = true_indices[:, [1, 0]]
-            true_indices = true_indices.t()
-            true_indices = tuple(true_indices.tolist())
-            # img[true_indices] = 255
-            # img = img.numpy()
             if center_alpha_annotation.shape[0] == 0:
                 if torch.cuda.is_available():
                     alpha_factor = torch.ones(
@@ -139,10 +122,6 @@ class FocalLoss(nn.Module):
             else:
                 cls_loss = torch.where(
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
-            dampening_factor = torch.where(gt_map, 1.0, retinanet.settings.DAMPENING_PARAMETER)
-            cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
-            # logging.debug(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
-            # cv2.imwrite(osp.expanduser(f'~/tmp/{np.random.randint(1000)}.jpg'), img)
             classification_losses.append(
                 cls_loss.sum()/torch.clamp(num_positive_anchors.float(), min=1.0))
             # compute the loss for regression
@@ -185,8 +164,6 @@ class FocalLoss(nn.Module):
                     torch.le(regression_diff_xy, 1.0 / 9.0),
                     0.5 * 9.0 * torch.pow(regression_diff_xy, 2),
                     regression_diff_xy - 0.5 / 9.0)
-                regression_loss_xy *= torch.unsqueeze(dampening_factor[positive_indices], dim=1)
-                regression_diff_angle *= dampening_factor[positive_indices]
                 xydistance_regression_losses.append(regression_loss_xy.mean())
                 angle_distance_regression_losses.append(
                     regression_diff_angle.mean())

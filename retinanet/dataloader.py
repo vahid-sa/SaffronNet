@@ -375,7 +375,7 @@ def collater(data):
     if max_num_annots > 0:
 
         annot_padded = torch.ones(
-            (len(annots), max_num_annots, NUM_VARIABLES+2)) * -1
+            (len(annots), max_num_annots, NUM_VARIABLES+1)) * -1
 
         if max_num_annots > 0:
             for idx, annot in enumerate(annots):

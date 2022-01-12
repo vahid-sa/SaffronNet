@@ -1,23 +1,18 @@
 import logging
 import os
-import gc
 import torch
-import json
 import numpy as np
 from os import path as osp
 from cv2 import cv2
 from math import inf
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from pynvml.smi import nvidia_smi
-import debugging_settings
 from retinanet import dataloader, csv_eval
 from retinanet import model
 from prediction import imageloader
 from utils.active_tools import Active
-from utils.visutils import draw_line, Visualizer
+from utils.visutils import Visualizer
 from utils.meta_utils import save_models
-from retinanet.utils import ActiveLabelMode
 
 
 class Training:
@@ -26,20 +21,16 @@ class Training:
             annotations_file_path,
             validation_file_path,
             classes_path,
-            states_dir,
             images_dir,
-            metrics_path=None,
             epochs=50,
             use_gpu=True,
     ):
         self._classes_path = classes_path
         self._epochs = epochs
         self._img_dir = images_dir
-        self._states_dir = states_dir
         self._annotations_file_path = annotations_file_path
         self._device = "cuda:0" if (use_gpu and torch.cuda.is_available()) else "cpu"
         self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': []}
-        self._metrics_path = metrics_path
         self._min_loss = inf
         self._max_mAP = 0.0
         self._val_loader = dataloader.CSVDataset(
@@ -49,24 +40,12 @@ class Training:
             images_dir=self._img_dir,
             image_extension=".jpg",
         )
-        self._memory_status_path = osp.join(osp.dirname(metrics_path), "memory_status.json")
-        self._memory_status = {"cycle": [], "epoch": [], "iteration": [], "used": [], "free": [], "total": [], "cuda_error": []}
-        os.makedirs(osp.dirname(self._metrics_path), exist_ok=True)
-
-    def _reset_memory(self):
-        return
-        torch.cuda.reset_max_memory_allocated(device=torch.device(self._device))
-        torch.cuda.reset_max_memory_cached(device=torch.device(self._device))
-        torch.cuda.reset_peak_memory_stats(device=torch.device(self._device))
-        # torch.cuda.empty_cache()
-        # gc.collect()
 
     def _load_training_data(self, loader_directory=None):
         dataset_train = dataloader.CSVDataset(
             train_file=self._annotations_file_path,
             class_list=self._classes_path,
             images_dir=self._img_dir,
-            ground_truth_states_directory=self._states_dir,
             transform=transforms.Compose([dataloader.Normalizer(), dataloader.Augmenter(), dataloader.Resizer()]),
             save_output_img_directory=loader_directory,
         )
@@ -102,7 +81,7 @@ class Training:
         mAP = mAP[0][0]
         return mAP
 
-    def _save_model(self, save_model_directory, model, optimizer=None,scheduler=None, mAP=0.0, loss=inf):
+    def _save_model(self, save_model_directory, model, optimizer=None, scheduler=None, mAP=0.0, loss=inf):
         if mAP > self._max_mAP:
             save_models(
                 model_path=osp.join(save_model_directory, "best_mAP_model.pt"),
@@ -122,30 +101,6 @@ class Training:
             )
             self._min_loss = loss
 
-    def _update_metrics(self, cycle, epoch, mAP, loss, lr,):
-        self._metrics['cycle'].append(cycle)
-        self._metrics['epoch'].append(epoch)
-        self._metrics['mAP'].append(mAP)
-        self._metrics['loss'].append(loss)
-        self._metrics['lr'].append(lr)
-        metrics = json.dumps(self._metrics)
-        with open(self._metrics_path, "w") as f:
-            f.write(metrics)
-
-    def _log_memory(self, cycle, epoch, iteration, cuda_error=False):
-        nvsmi = nvidia_smi.getInstance()
-        mem_stat = nvsmi.DeviceQuery('memory.free, memory.total, memory.used')
-        mem_stat = mem_stat['gpu'][0]['fb_memory_usage']
-        self._memory_status["cycle"].append(cycle)
-        self._memory_status["epoch"].append(epoch)
-        self._memory_status["iteration"].append(iteration)
-        self._memory_status['used'].append(mem_stat['used'])
-        self._memory_status['free'].append(mem_stat['free'])
-        self._memory_status['total'].append(mem_stat['total'])
-        self._memory_status['cuda_error'].append(cuda_error)
-        with open(self._memory_status_path, "w") as f:
-            f.write(json.dumps(self._memory_status))
-
     def train(self, state_dict_path, models_directory, cycle_num=-1):
         train_loader = self._load_training_data()
         retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
@@ -161,12 +116,11 @@ class Training:
         self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP)
         num_cuda_errors = 0
         for epoch_num in range(self._epochs):
-            debugging_settings.EPOCH_NUM = epoch_num + 1
             retinanet.train()
             retinanet.training = True
             epoch_loss = []
             for iter, data in enumerate(train_loader):
-                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
+                params = [data['img'].cuda().float(), data['annot']]
                 optimizer.zero_grad()
                 try:
                     losses = retinanet(params)
@@ -180,17 +134,13 @@ class Training:
                 angle_distance_regression_losses = angle_distance_regression_losses.mean()
                 loss = classification_loss + xydistance_regression_loss + angle_distance_regression_losses
                 if loss == 0:
-                    # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                     continue
-                self._reset_memory()
                 try:
                     loss.backward()
                 except RuntimeError:
-                    # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter, cuda_error=True)
                     num_cuda_errors += 1
                     print("CUDA out of memory.")
                     continue
-                # self._log_memory(cycle=cycle_num, epoch=epoch_num, iteration=iter)
                 torch.nn.utils.clip_grad_norm_(retinanet.parameters(), 0.1)
                 optimizer.step()
                 loss_value = float(loss.detach().cpu())
@@ -216,7 +166,6 @@ class Training:
                 )
             )
             self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP, loss=mean_epoch_loss)
-            self._update_metrics(cycle=cycle_num, epoch=epoch_num, mAP=mAP, loss=mean_epoch_loss, lr=optimizer.param_groups[0]['lr'])
             scheduler.step(mean_epoch_loss)
         print(f"cuda_errors: {num_cuda_errors}")
 
@@ -224,21 +173,27 @@ class Training:
 class ActiveTraining(Training):
     def __init__(
         self,
-        active_annotations_path,
-        corrected_annotations_path,
+        annotations_path,
         validation_file_path,
-        groundtruth_annotations_path,
+        oracle_annotations_path,
         classes_path,
-        states_dir,
         images_dir,
-        metrics_path=None,
-        supervised_annotations_path=None,
-        filenames_path=None,
+        filenames_path,
+        aggregator_type,
+        uncertainty_alorithm,
+        budget=2,
         epochs=50,
-        radius=50,
         use_gpu=True,
+        metrics_path=None,
     ):
-        super().__init__(active_annotations_path, validation_file_path, classes_path, states_dir, images_dir, metrics_path=metrics_path, epochs=epochs, use_gpu=use_gpu)
+        super().__init__(
+            annotations_file_path=annotations_path,
+            validation_file_path=validation_file_path,
+            classes_path=classes_path,
+            images_dir=images_dir,
+            epochs=epochs,
+            use_gpu=use_gpu,
+        )
         self._image_loader = imageloader.CSVDataset(
             filenames_path=filenames_path,
             partition="unsupervised",
@@ -247,136 +202,61 @@ class ActiveTraining(Training):
             image_extension=".jpg",
             transform=transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
         )
-        self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=filenames_path, supervised_annotations_path=supervised_annotations_path)
-        self._corrected_annotations_path = corrected_annotations_path
-        self._active_annotations_path = active_annotations_path
-        self._gt_loader = self._load_groundtruth_data(gt_annotations_path=groundtruth_annotations_path)
-        self._metrics["annotations"] = []
+        self._active = Active(
+            loader=self._image_loader,
+            annotations_path=annotations_path,
+            class_list_path=classes_path,
+            budget=budget,
+            aggregator_type=aggregator_type,
+            uncertainty_algorithm=uncertainty_alorithm,
+        )
+        self._active_annotations_path = annotations_path
+        self._gt_loader = self._load_groundtruth_data(gt_annotations_path=oracle_annotations_path)
+        self._metrics = {"num_cycle": [], "num_imgs": [], "num_labels": []}
 
-    def _load_groundtruth_data(self, gt_annotations_path, loader_directory=None):
+    def _load_groundtruth_data(self, gt_annotations_path):
         gt_loader = dataloader.CSVDataset(
             train_file=gt_annotations_path,
             class_list=self._classes_path,
             images_dir=self._img_dir,
             transform=transforms.Compose([dataloader.Normalizer(), dataloader.Resizer()]),
-            save_output_img_directory=loader_directory,
         )
         return gt_loader
 
-    def write_predicted_images(self, direc):
-        os.makedirs(direc, exist_ok=True)
-        active_states = self._active.states
-        uncertain_detections = self._active.uncertain_predictions
-        noisy_detections = self._active.noisy_predictions
-        corrected_annotations = self._active.ground_truth_annotations
-        active_annotations = self._active.active_annotations
-        for i in range(len(self._image_loader.image_names)):
-            image = cv2.imread(osp.join(self._image_loader.img_dir, self._image_loader.image_names[i] + self._image_loader.ext))
-            my_mask = np.ones(shape=image.shape, dtype=np.float64)
-            mask = active_states[i]
-            my_mask[mask] *= 0.5
-            image = image.astype(np.float64) * my_mask
-            image = image.astype(np.uint8)
-            image_noisy_detections = noisy_detections[noisy_detections[:, 0] == int(self._image_loader.image_names[i])]
-            image_uncertain_detections = uncertain_detections[uncertain_detections[:, 0] == int(self._image_loader.image_names[i])]
-            image_active_annotations = active_annotations[active_annotations[:, 0] == int(self._image_loader.image_names[i])]
-            image_corrected_annotations = corrected_annotations[corrected_annotations[:, 0] == int(self._image_loader.image_names[i])]
-            ground_truth_annotations = self._gt_loader[i]['annot'].detach().cpu().numpy()
-            for annotation in ground_truth_annotations:
-                x = annotation[0]
-                y = annotation[1]
-                alpha = annotation[2]
-                image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
-                                distance_thresh=40, line_thickness=2)
-
-            for det in image_uncertain_detections:
-                x = int(det[1])
-                y = int(det[2])
-                alpha = det[3]
-                score = det[5]
-                image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
-                cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
-
-            for det in image_noisy_detections:
-                x = int(det[1])
-                y = int(det[2])
-                alpha = det[3]
-                score = det[5]
-                image = draw_line(image, (x, y), alpha, line_color=(0, 255, 255), center_color=(0, 0, 0), half_line=True,
-                                distance_thresh=40, line_thickness=2)
-                cv2.putText(image, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 255, 255), 2)
-
-            for annot in image_corrected_annotations:
-                x = int(annot[1])
-                y = int(annot[2])
-                alpha = annot[3]
-                score = annot[5]
-                image = draw_line(image, (x, y), alpha, line_color=(255, 255, 0), center_color=(0, 0, 0), half_line=True,
-                                distance_thresh=40, line_thickness=2)
-
-            for annot in image_active_annotations:
-                x = int(annot[1])
-                y = int(annot[2])
-                alpha = annot[3]
-                status = annot[-1]
-                if status == ActiveLabelMode.corrected.value:
-                    color = (0, 255, 0)
-                elif status == ActiveLabelMode.noisy.value:
-                    color = (255, 0, 0)
-                else:
-                    color = (0, 0, 0)
-                image = draw_line(image, (x, y), alpha, line_color=color, center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
-                cv2.imwrite(osp.join(direc, self._image_loader.image_names[i] + self._image_loader.ext), image)
-
-    def _create_annotations(self, model, budget):
-        self._active.create_active_annotations(
+    def _create_annotations(self, model):
+        self._active.create_annotations(
             model=model,
-            budget=budget,
-            ground_truth_loader=self._gt_loader,
-            ground_truth_annotations_path=self._corrected_annotations_path,
-            active_annotations_path=self._active_annotations_path,
-            classes_list_path=self._classes_path,
+            ground_truth_dataloader=self._gt_loader,
         )
 
+    """
     def _log_active_annotations_metrics(self, num_cycle):
-        uncertain_queries = self._active.uncertain_predictions
-        gt_annotations = self._active.ground_truth_annotations
         scores = uncertain_queries[:, -1]
         num_labeled = len(gt_annotations)
         num_images = len(np.unique(uncertain_queries[:, 0]))
         num_higher_than_half_queries = sum((scores >= 0.5).tolist())
         num_lower_than_half_queries = sum((scores < 0.5).tolist())
         logging.info(
-            "# new labels: {0}\n# images containing queries: {1}\n# query scores > 0.5: {2}\n# query scores < 0.5: {3}".format(
-                num_labeled, num_images, num_higher_than_half_queries, num_lower_than_half_queries,
+            "# labels: {0}\n# images".format(
+                num_labels, num_images,
             )
         )
         metrics = {
             "num_cycle": num_cycle,
-            "num_new_labels": num_labeled,
-            "num_higher_half_queries": num_higher_than_half_queries,
-            "num_lower_half_queries": num_lower_than_half_queries,
+            "num_labels": 0,
             "num_images": num_images,
         }
         self._metrics["annotations"].append(metrics)
         # written in parent
+    """
 
-    def run_cycle(self, cycles, init_state_dict_path, models_directory, results_dir, budget=100):
+    def run_cycle(self, cycles, init_state_dict_path, models_directory):
         for i in range(1, cycles+1):
-            debugging_settings.CYCLE_NUM = i
             print(f"Cycle: {i}")
             state_dict_path = init_state_dict_path if (i == 1) else osp.join(models_directory, f"cycle_{i - 1:02d}","best_mAP_state_dict.pt")
             retinanet, _, _ = self._load_model(state_dict_path=state_dict_path, num_classes=1)
             print("creating annotations...")
             retinanet.eval()
             retinanet.training = False
-            self._create_annotations(model=retinanet, budget=budget)
-            self._log_active_annotations_metrics(num_cycle=i)
-            print("Writing created annotations images")
-            results_directory = osp.join(results_dir, f"cycle_{i:02d}")
-            debugging_settings.CLASSIFICATION_SCORES_PATH = osp.join(results_dir, "classification_scores")
-            os.mkdir(results_directory)
-            # self.write_predicted_images(direc=osp.join(results_directory, "create_annotations"))
-            del retinanet
-            print("training...")
+            self._create_annotations(model=retinanet)
             self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), cycle_num=i)
