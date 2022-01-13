@@ -13,7 +13,7 @@ from utils.prediction import detect
 
 
 class Active:
-    def __init__(self, loader, states_dir, radius, image_string_file_numbers_path=None, supervised_annotations_path=None):
+    def __init__(self, loader, states_dir, radius, uncertainty_algorithm="least", image_string_file_numbers_path=None, supervised_annotations_path=None):
         self._NAME, self._X, self._Y, self._ALPHA, self._LABEL, self._SCORE = 0, 1, 2, 3, 4, 5
         self._loader = loader
         self._states_dir = states_dir
@@ -27,7 +27,8 @@ class Active:
         self._write_supervised_data = False if ((image_string_file_numbers_path is None) or (supervised_annotations_path is None)) else True
         self._supervised_string_file_numbers = Active._load_supervised_string_file_numbers(string_file_number_path=image_string_file_numbers_path) if self._write_supervised_data else None
         self._supervised_annotations_path = supervised_annotations_path if self._write_supervised_data else None
-
+        self._uncertainty_algorithm = uncertainty_algorithm
+        assert self._uncertainty_algorithm in ("least", "random"), f"incorrect uncertainty algorithm {self._uncertainty_algorithm}"
         if osp.isdir(self._states_dir):
             shutil.rmtree(self._states_dir)
         os.makedirs(self._states_dir, exist_ok=False)
@@ -69,8 +70,11 @@ class Active:
 
     def _select_uncertain_boxes(self, budget):
         indices = list()
-        scores = np.abs(self._boxes[:, self._SCORE] - 0.5)
-        sorted_indices = scores.argsort()
+        if self._uncertainty_algorithm == "least":
+            scores = (0.5 - np.abs(self._boxes[:, self._SCORE] - 0.5)) * 2
+        else:
+            scores = np.random.uniform(low=0.0, high=1.0, size=self._boxes.shape[0])
+        sorted_indices = np.argsort(scores)[::-1]
         sorted_boxes = self._boxes[sorted_indices]
         i = -1
         while len(indices) < budget:
@@ -138,7 +142,6 @@ class Active:
         uncertain_scores = uncertain_boxes[:, self._SCORE]
         maximum_uncertain_score = np.max(uncertain_scores)
         higher_than_uncertain_score_indices = np.squeeze(np.argwhere(self._boxes[:, self._SCORE] > maximum_uncertain_score))
-        logging.debug(f"states shape: {self._states.shape}")
         for i in higher_than_uncertain_score_indices:
             box = self._boxes[i]
             name, x, y = int(box[self._NAME]), int(box[self._X]), int(box[self._Y])

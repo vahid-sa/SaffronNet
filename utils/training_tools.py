@@ -231,6 +231,7 @@ class ActiveTraining(Training):
         classes_path,
         states_dir,
         images_dir,
+        uncertainty_algorithm="least",
         metrics_path=None,
         supervised_annotations_path=None,
         filenames_path=None,
@@ -247,7 +248,14 @@ class ActiveTraining(Training):
             image_extension=".jpg",
             transform=transforms.Compose([imageloader.Normalizer(), imageloader.Resizer()]),
         )
-        self._active = Active(loader=self._image_loader, states_dir=self._states_dir, radius=radius, image_string_file_numbers_path=filenames_path, supervised_annotations_path=supervised_annotations_path)
+        self._active = Active(
+            loader=self._image_loader,
+            states_dir=self._states_dir,
+            radius=radius,
+            image_string_file_numbers_path=filenames_path,
+            supervised_annotations_path=supervised_annotations_path,
+            uncertainty_algorithm=uncertainty_algorithm,
+        )
         self._corrected_annotations_path = corrected_annotations_path
         self._active_annotations_path = active_annotations_path
         self._gt_loader = self._load_groundtruth_data(gt_annotations_path=groundtruth_annotations_path)
@@ -353,7 +361,7 @@ class ActiveTraining(Training):
         )
         metrics = {
             "num_cycle": num_cycle,
-            "num_new_labels": num_labeled,
+            "num_labels": num_labeled,
             "num_higher_half_queries": num_higher_than_half_queries,
             "num_lower_half_queries": num_lower_than_half_queries,
             "num_images": num_images,

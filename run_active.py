@@ -32,6 +32,7 @@ class parser:
     budget = 100
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
+    uncertainty_algorithm = "least"
 
     @staticmethod
     def reset():
@@ -66,6 +67,7 @@ def main():
         supervised_annotations_path=parser.supervised_annotations,
         filenames_path=parser.filenames,
         epochs=parser.epochs,
+        uncertainty_algorithm=parser.uncertainty_algorithm,
     )
     active_trainer.run_cycle(
         cycles=parser.cycles,
