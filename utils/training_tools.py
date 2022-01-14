@@ -2,8 +2,10 @@ import logging
 import os
 import torch
 import numpy as np
+import csv
+import cv2
+import json
 from os import path as osp
-from cv2 import cv2
 from math import inf
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -30,7 +32,7 @@ class Training:
         self._img_dir = images_dir
         self._annotations_file_path = annotations_file_path
         self._device = "cuda:0" if (use_gpu and torch.cuda.is_available()) else "cpu"
-        self._metrics = {'cycle': [], 'epoch':[], 'mAP': [], 'loss': [], 'lr': []}
+        self._metrics = list()
         self._min_loss = inf
         self._max_mAP = 0.0
         self._val_loader = dataloader.CSVDataset(
@@ -103,7 +105,8 @@ class Training:
 
     def train(self, state_dict_path, models_directory, cycle_num=-1):
         train_loader = self._load_training_data()
-        retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1)
+        lr = 1e-5
+        retinanet, optimizer, scheduler = self._load_model(state_dict_path=state_dict_path, num_classes=1, learning_rate=lr)
         self._min_loss = inf
         self._max_mAP = 0.0
 
@@ -165,6 +168,8 @@ class Training:
                     mAP,
                 )
             )
+            metric = {'cycle': cycle_num, 'epoch': epoch_num, 'mAP': mAP, 'loss': mean_epoch_loss, 'lr': lr}
+            self._metrics.append(metric)
             self._save_model(save_model_directory=models_directory, model=retinanet, optimizer=optimizer, scheduler=scheduler, mAP=mAP, loss=mean_epoch_loss)
             scheduler.step(mean_epoch_loss)
         print(f"cuda_errors: {num_cuda_errors}")
@@ -210,9 +215,9 @@ class ActiveTraining(Training):
             aggregator_type=aggregator_type,
             uncertainty_algorithm=uncertainty_alorithm,
         )
-        self._active_annotations_path = annotations_path
         self._gt_loader = self._load_groundtruth_data(gt_annotations_path=oracle_annotations_path)
-        self._metrics = {"num_cycle": [], "num_imgs": [], "num_labels": []}
+        self._active_metrics = {"active": [], "train": self._metrics} #{"num_cycle": [], "num_imgs": [], "num_labels": []}
+        self._metrics_path = metrics_path
 
     def _load_groundtruth_data(self, gt_annotations_path):
         gt_loader = dataloader.CSVDataset(
@@ -229,26 +234,26 @@ class ActiveTraining(Training):
             ground_truth_dataloader=self._gt_loader,
         )
 
-    """
     def _log_active_annotations_metrics(self, num_cycle):
-        scores = uncertain_queries[:, -1]
-        num_labeled = len(gt_annotations)
-        num_images = len(np.unique(uncertain_queries[:, 0]))
-        num_higher_than_half_queries = sum((scores >= 0.5).tolist())
-        num_lower_than_half_queries = sum((scores < 0.5).tolist())
-        logging.info(
-            "# labels: {0}\n# images".format(
-                num_labels, num_images,
-            )
-        )
+        if osp.isfile(self._annotations_file_path):
+            f = open(self._annotations_file_path, 'r')
+            reader = csv.reader(f)
+            img_numbers = [int(row[0]) for row in reader]
+            label_count = len(img_numbers)
+            img_count = len(np.unique(img_numbers))
+            f.close()
+        else:
+            label_count = 0
+            img_count = 0
         metrics = {
             "num_cycle": num_cycle,
-            "num_labels": 0,
-            "num_images": num_images,
+            "num_labels": label_count,
+            "num_images": img_count,
         }
-        self._metrics["annotations"].append(metrics)
-        # written in parent
-    """
+        self._active_metrics["active"].append(metrics)
+        if self._metrics_path is not None:
+            with open(self._metrics_path, "w") as f:
+                f.write(json.dumps(self._active_metrics))
 
     def run_cycle(self, cycles, init_state_dict_path, models_directory):
         for i in range(1, cycles+1):
@@ -259,4 +264,5 @@ class ActiveTraining(Training):
             retinanet.eval()
             retinanet.training = False
             self._create_annotations(model=retinanet)
+            self._log_active_annotations_metrics(num_cycle=i)
             self.train(state_dict_path=state_dict_path, models_directory=osp.join(models_directory, f"cycle_{i:02d}"), cycle_num=i)

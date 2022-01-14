@@ -28,11 +28,11 @@ class parser:
     epochs = 30
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
-    cycles = 10
-    budget = 2
+    cycles = 86
+    budget = 1
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
-    aggregator_type="max"  # avg, sum
+    aggregator_type="avg"  # avg, sum
     uncertainty_algorihm="least"  # bce, random
 
     @staticmethod

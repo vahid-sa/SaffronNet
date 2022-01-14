@@ -350,6 +350,14 @@ class CSVDataset(Dataset):
         image = Image.open(self.image_names[image_index])
         return float(image.width) / float(image.height)
 
+    @property
+    def num_labels(self):
+        f = open(self.train_file, "r")
+        reader = csv.reader(f)
+        count = sum([1 for _ in reader])
+        f.close()
+        return count
+
 
 def collater(data):
     imgs = [s['img'] for s in data]
