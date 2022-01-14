@@ -211,3 +211,13 @@ def load_classes(csv_class_list_path: str) -> Tuple[dict, dict]:
     fileIO.close()
     return class_to_index, index_to_class
 
+
+def unnormalizer(image: np.ndarray, standardized: bool = True) -> np.ndarray:
+  mean = [0.485, 0.456, 0.406]
+  std = [0.229, 0.224, 0.225]
+  coefficient = 255.0 if standardized else 1.0
+  img = image.astype(np.float32)
+  img *= std
+  img += mean
+  img *= coefficient
+  return img.astype(np.uint8)
