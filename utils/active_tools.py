@@ -16,6 +16,7 @@ class Active:
         loader: imageloader.CSVDataset,
         annotations_path: str,
         class_list_path: str,
+        ground_truth_dataloader: dataloader.CSVDataset,
         budget: int = 2,
         aggregator_type: str = "max",
         uncertainty_algorithm: str = "least",
@@ -27,6 +28,7 @@ class Active:
         self._budget = budget
         self._annotations_path = annotations_path
         self._class_list_path = class_list_path
+        self._gt_loader: dataloader.CSVDataset = ground_truth_dataloader
 
         self._boxes: np.ndarray = None
         self._uncertain_image_list: np.ndarray = None
@@ -117,10 +119,12 @@ class Active:
         uncertainty_scores = calculator(predicted_boxes[:, self._SCORE])
         boxes_names = predicted_boxes[:, self._NAME]
         img_names = np.unique(boxes_names)
+        gt_loader_img_names = [int(osp.splitext(osp.basename(image_name))[0]) for image_name in self._gt_loader.image_names]
         image_uncertainty_scores = [
             [
                 img_name,
                 aggregator(uncertainty_scores[boxes_names == img_name]),
+                len(self._gt_loader[gt_loader_img_names.index(img_name)]['annot']),
             ] for img_name in img_names
         ]
         return np.asarray(image_uncertainty_scores, dtype=np.float64)
@@ -132,17 +136,30 @@ class Active:
             uncertain_img_names =  []
         else:
             sorted_img_uncertainty_scores = not_selected_img_uncertainty_scores[np.argsort(not_selected_img_uncertainty_scores[:, 1])[::-1]]
-            uncertain_img_names = sorted_img_uncertainty_scores[:self._budget, 0].tolist()
+            num_annotations = 0
+            diff_annots_budget = self._budget
+            index = -1
+            for i in range(len(sorted_img_uncertainty_scores)):
+                if num_annotations >= self._budget:
+                    break
+                num_new_annotations = num_annotations + sorted_img_uncertainty_scores[i][2]
+                diff_new_annots_budget = np.abs(self._budget - num_new_annotations)
+                if (diff_new_annots_budget < diff_annots_budget) or (i == 0):
+                    num_annotations = num_new_annotations
+                    diff_annots_budget = diff_new_annots_budget
+                else:
+                    break
+                index = i
+            uncertain_img_names = sorted_img_uncertainty_scores[:index + 1, 0].tolist()
         return uncertain_img_names
 
-    @staticmethod
-    def _label_uncertain_images(uncertain_img_names: list, dataloader: dataloader.CSVDataset) -> np.ndarray:
-        loader_image_paths = dataloader.image_names
+    def _label_uncertain_images(self, uncertain_img_names: list) -> np.ndarray:
+        loader_image_paths = self._gt_loader.image_names
         loader_image_names = [int(osp.basename(osp.splitext(path)[0])) for path in loader_image_paths]
         annotations = []
         for img_name in uncertain_img_names:
             index =  loader_image_names.index(img_name)
-            image_annotations = dataloader[index]["annot"].numpy()
+            image_annotations = self._gt_loader[index]["annot"].numpy()
             image_annotations = np.hstack([
                 np.full(shape=(image_annotations.shape[0], 1), dtype=image_annotations.dtype, fill_value=img_name),
                 image_annotations,
@@ -167,7 +184,6 @@ class Active:
 
     def create_annotations(
         self,
-        ground_truth_dataloader: dataloader.CSVDataset,
         model: VGGNet,
     ):
         predicted_boxes = self._predict_boxes(model=model)
@@ -180,8 +196,8 @@ class Active:
             previous_annotations = np.asarray([], dtype=np.float32)
             annotated_img_names = np.asarray([], dtype=np.float32)
         uncertain_img_names = self._select_uncertain_images(annotated_img_names=annotated_img_names, img_uncertainty_scores=img_uncertainty_scores)
-        new_annotations = Active._label_uncertain_images(uncertain_img_names=uncertain_img_names, dataloader=ground_truth_dataloader)
-        self._uncertain_image_list = np.unique(new_annotations[:, 0].astype(np.int64)).tolist()
+        new_annotations = self._label_uncertain_images(uncertain_img_names=uncertain_img_names)
+        self._uncertain_image_list = np.unique(new_annotations[:, 0].astype(np.int64)).tolist() if len(new_annotations) else []
         if len(previous_annotations) and len(new_annotations):
             annotations = np.concatenate([previous_annotations, new_annotations], axis=0)
         elif len(new_annotations):

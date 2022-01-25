@@ -28,8 +28,8 @@ class parser:
     epochs = 30
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
-    cycles = 86
-    budget = 1
+    cycles = 10
+    budget = 100
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
     aggregator_type="avg"  # avg, sum
@@ -68,6 +68,7 @@ def main():
         uncertainty_alorithm=parser.uncertainty_algorihm,
         budget=parser.budget,
         metrics_path=parser.metrics_path,
+        epochs=parser.epochs,
     )
     active_trainer.run_cycle(
         cycles=parser.cycles,

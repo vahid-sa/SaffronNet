@@ -1,5 +1,7 @@
 import os
 import json
+from re import L
+import shutil
 import numpy as np
 from cv2 import cv2
 import torch
@@ -14,10 +16,11 @@ from utils.visutils import draw_line
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations):
+    def forward(self, classifications, regressions, anchors, annotations, imgs=None):
         alpha = 0.95
         gamma = 2.0
         predictions = torch.add(anchors, regressions)
+        FocalLoss.write_images(annotations=annotations, imgs=imgs)
         batch_size = classifications.shape[0]
         classification_losses = []
         xydistance_regression_losses = []
@@ -272,3 +275,35 @@ class FocalLoss(nn.Module):
                             distance_thresh=40, line_thickness=2)
         write_path = osp.join(write_dir, osp.basename(read_path))
         cv2.imwrite(write_path, img)
+
+    @staticmethod
+    def write_images(annotations, imgs, write_dir="~/st/Saffron/tmp/"):
+        if imgs is None:
+            return 0
+        write_dir = osp.abspath(osp.expandvars(osp.expanduser(write_dir)))
+        imgs = imgs.detach().cpu()
+        imgs = imgs.permute(0, 2, 3, 1)
+        imgs = imgs.numpy()
+        annotations = annotations.detach().cpu().numpy()
+        os.makedirs(write_dir, exist_ok=True)
+        num_written_files = len(os.listdir(write_dir))
+        i = 0
+        for img, img_annotations in zip(imgs, annotations):
+            img = cv2.cvtColor(retinanet.utils.unnormalizer(image=img), cv2.COLOR_BGR2RGB)
+            for annot in img_annotations:
+                x, y, alpha = annot[0], annot[1], annot[2]
+                img = draw_line(
+                    img,
+                    (x, y),
+                    alpha,
+                    line_color=(0, 0, 0),
+                    center_color=(0, 0, 0),
+                    half_line=True,
+                    distance_thresh=40,
+                    line_thickness=2,
+                )
+            i += 1
+            name = f"{num_written_files + i:03d}.jpg"
+            write_path = osp.join(write_dir, name)
+            cv2.imwrite(write_path, img)
+        return 0

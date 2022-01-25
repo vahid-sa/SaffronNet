@@ -263,10 +263,10 @@ class ResNet(nn.Module):
 
     def forward(self, inputs):
         if self.training:
-            img_batch, annotations, states = inputs
+            img_batch, annotations = inputs
         else:
             img_batch = inputs
-            annotations, states = None, None
+            annotations = None
         x = self.conv1(img_batch)
         x = self.bn1(x)
         x = self.relu(x)
@@ -280,10 +280,8 @@ class ResNet(nn.Module):
         classification = self.classificationModel(x2)
         anchors = self.anchors(img_batch)
 
-        gc.collect()
-        torch.cuda.empty_cache()
         if self.training:
-            return self.focalLoss(classification, regression, anchors, annotations, states)
+            return self.focalLoss(classification, regression, anchors, annotations, img_batch)
         else:
             self.img_number += 1
             transformed_anchors = self.regressBoxes(anchors, regression)
@@ -386,7 +384,7 @@ class VGGNet(nn.Module):
         self._predictions_store['regression'] = regression.detach().cpu().numpy()
         self._predictions_store['anchors'] = anchors.detach().cpu().numpy()
         if self.training:
-            return_value = self.focalLoss(classification, regression, anchors, annotations)
+            return_value = self.focalLoss(classification, regression, anchors, annotations)  #, img_batch)
         else:
             return_value =  self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
         return return_value
@@ -424,7 +422,7 @@ class BoxesModel(nn.Module):
             anchors_nms_idx = nms(
                 anchorBoxes,
                 scores,
-                min_score=0.25)
+                min_score=0.4)
             if len(anchors_nms_idx) == 0:
                 continue
             finalResult[0].extend(scores[anchors_nms_idx])
