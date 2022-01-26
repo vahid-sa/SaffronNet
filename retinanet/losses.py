@@ -1,27 +1,22 @@
 import os
-import logging
-import json
 import numpy as np
-from cv2 import cv2
+import cv2
 import torch
 import torch.nn as nn
 import gc
 from os import path as osp
-from sklearn import preprocessing
 from .utils import calc_distance
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
-import debugging_settings
 from utils.visutils import draw_line
 
 
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations, states, img_paths, write_directory=None):
+    def forward(self, classifications, regressions, anchors, annotations, states):
         alpha = 0.95
         gamma = 2.0
-        predictions = torch.add(anchors, regressions)
         batch_size = classifications.shape[0]
         classification_losses = []
         xydistance_regression_losses = []
@@ -34,16 +29,15 @@ class FocalLoss(nn.Module):
         # print(f"x: {anchor_ctr_x.max()}\ny: {anchor_ctr_y.max()}\na: {anchor_alpha.max()}")
         for j in range(batch_size):
             classification = classifications[j, :, :]
-            with open(debugging_settings.CLASSIFICATION_SCORES_PATH, "a") as f:
-                hist, _ = np.histogram(classification.detach().cpu().numpy(), bins=10, range=(0.0, 1.0))
-                f.write(json.dumps({"cycle": debugging_settings.CYCLE_NUM, "epoch": debugging_settings.EPOCH_NUM, "scores": hist.tolist()}))
+            # with open(debugging_settings.CLASSIFICATION_SCORES_PATH, "a") as f:
+            #     hist, _ = np.histogram(classification.detach().cpu().numpy(), bins=10, range=(0.0, 1.0))
+            #     f.write(json.dumps({"cycle": debugging_settings.CYCLE_NUM, "epoch": debugging_settings.EPOCH_NUM, "scores": hist.tolist()}))
             regression = regressions[j, :, :]
             center_alpha_annotation = annotations[j, :, :]
             center_alpha_annotation = center_alpha_annotation[
                 center_alpha_annotation[:, NUM_VARIABLES] != -1]
             classification = torch.clamp(classification, 1e-4, 1.0 - 1e-4)
             state = states[j, :, :, :]
-            prediction = predictions[j, :, :]
             gt_map = FocalLoss.set_noisy_anchors(state=state, anchor=anchor)
             # img = torch.zeros(size=(state.shape[:2]), dtype=torch.uint8)
             true_indices = anchor[gt_map].to(dtype=torch.int64, device='cpu')
@@ -99,12 +93,7 @@ class FocalLoss(nn.Module):
                 dxy_min, 1.5 * MAX_ANOT_ANCHOR_POSITION_DISTANCE), :] = 0
             targets[torch.ge(
                 a, 1.5 * MAX_ANOT_ANCHOR_ANGLE_DISTANCE), :] = 0
-            positive_indices, background_positive_indices = FocalLoss.get_positive_indices(
-                annotation=center_alpha_annotation,
-                min_distances=dxy_min,
-                min_distances_args=dxy_argmin,
-                accepted_dalpha=a,
-            )
+            positive_indices = FocalLoss.get_positive_indices(min_distances=dxy_min, accepted_dalpha=a)
             assigned_annotations = FocalLoss.get_assigned_annotations(
                 annotation=center_alpha_annotation,
                 min_distances_args=dxy_argmin,
@@ -116,7 +105,6 @@ class FocalLoss(nn.Module):
             # assert sum(positive_indices) == assigned_annotations.shape[0], "only one index for each annotation"
             targets[positive_indices,
                     assigned_annotations[:, 3].long()] = 1
-
             # -------------------------------------------------------------------------
             if torch.cuda.is_available():
                 alpha_factor = torch.ones(targets.shape).cuda() * alpha
@@ -141,6 +129,7 @@ class FocalLoss(nn.Module):
                     torch.ne(targets, -1.0), cls_loss, torch.zeros(cls_loss.shape))
             dampening_factor = torch.where(gt_map, 1.0, retinanet.settings.DAMPENING_PARAMETER)
             cls_loss *= torch.unsqueeze(dampening_factor, dim=1)
+            # self.write_loss(states=state, anchors_like=anchor[:, :2], cls_losses=cls_loss)
             # logging.debug(f"dampening_parameter: {retinanet.settings.DAMPENING_PARAMETER}")
             # cv2.imwrite(osp.expanduser(f'~/tmp/{np.random.randint(1000)}.jpg'), img)
             classification_losses.append(
@@ -167,7 +156,6 @@ class FocalLoss(nn.Module):
                 else:
                     targets = targets/torch.Tensor([[1, 1, 1]])
 
-                negative_indices = 1 + (~positive_indices)
                 regression_diff_xy = torch.abs(
                     targets[:, :2] - regression[positive_indices, :2])
 
@@ -207,15 +195,12 @@ class FocalLoss(nn.Module):
                    dim=0, keepdim=True)
 
     @staticmethod
-    def get_positive_indices(annotation, min_distances, min_distances_args, accepted_dalpha):
+    def get_positive_indices(min_distances, accepted_dalpha):
         positive_indices = torch.logical_and(
             torch.le(min_distances, MAX_ANOT_ANCHOR_POSITION_DISTANCE),
             torch.le(accepted_dalpha, MAX_ANOT_ANCHOR_ANGLE_DISTANCE),
         )
-        assigned_labels = annotation[min_distances_args, 3]
-        background_positive_indices = torch.logical_and(positive_indices, torch.eq(assigned_labels, -1))
-        foreground_positive_indices = torch.logical_and(positive_indices, torch.ne(assigned_labels, -1))
-        return foreground_positive_indices, background_positive_indices
+        return positive_indices
 
     @staticmethod
     def get_assigned_annotations(annotation, positive_indices, min_distances_args):
@@ -250,6 +235,19 @@ class FocalLoss(nn.Module):
         state = torch.squeeze(state)
         points = tuple(torch.round(anchor[:, [1, 0]]).type(torch.LongTensor).detach().cpu().numpy().T.tolist())
         return state[points]
+
+    @staticmethod
+    def write_loss(states: torch.Tensor, anchors_like: torch.Tensor, cls_losses: torch.Tensor, write_dir: str = "~/st/Saffron/tmp/"):
+        write_dir = osp.abspath(osp.expanduser(osp.expanduser(write_dir)))
+        canvas = np.zeros(shape=states.size(), dtype=np.uint8)
+        points = tuple(torch.round(anchors_like[:, [1, 0]]).type(torch.LongTensor).detach().cpu().numpy().T.tolist())
+        values = np.where(cls_losses.detach().cpu().numpy() !=0, 255, 0) 
+        canvas[points] = values
+        os.makedirs(write_dir, exist_ok=True)
+        name = f"{len(os.listdir(write_dir)) + 1:03d}.png"
+        path = osp.join(write_dir, name)
+        cv2.imwrite(path, canvas)
+        return 0
 
     @staticmethod
     def write_img_loss(read_path, cls_loss, write_dir, anchors_like):

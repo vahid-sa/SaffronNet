@@ -166,7 +166,7 @@ class Training:
             retinanet.training = True
             epoch_loss = []
             for iter, data in enumerate(train_loader):
-                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda(), None, None]
+                params = [data['img'].cuda().float(), data['annot'], data['gt_state'].cuda()]
                 optimizer.zero_grad()
                 try:
                     losses = retinanet(params)
