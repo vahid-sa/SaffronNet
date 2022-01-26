@@ -15,12 +15,12 @@ from utils.active_tools import Active
 from utils.visutils import draw_line, Visualizer
 
 class Args:
-    ground_truth_annotations = osp.abspath("annotations/supervised.csv")
+    ground_truth_annotations = osp.abspath("annotations/unsupervised.csv")
     csv_classes = osp.abspath("annotations/labels.csv")
     images_dir = osp.expanduser("~/Saffron/dataset/Train/")
     corrected_annotations = osp.expanduser("~/Saffron/active_annotations/corrected.csv")
     filenames = osp.abspath("annotations/filenames.json")
-    partition = "supervised"
+    partition = "unsupervised"
     ext = ".jpg"
     state_dict_path = osp.expanduser('~/Saffron/init_fully_trained_weights/init_state_dict.pt')
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
@@ -57,7 +57,7 @@ Args.reset()
 
 image_loader = imageloader.CSVDataset(
     filenames_path=Args.filenames,
-    partition="supervised",
+    partition="unsupervised",
     class_list=Args.csv_classes,
     images_dir=Args.images_dir,
     image_extension=".jpg",
