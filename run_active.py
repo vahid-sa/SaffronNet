@@ -25,7 +25,7 @@ class parser:
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
     active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
     save_directory = osp.expanduser("~/st/Saffron/imgs/")
-    epochs = 30
+    epochs = 10
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
