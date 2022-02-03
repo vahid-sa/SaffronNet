@@ -19,6 +19,7 @@ from utils.visutils import Visualizer
 from utils.meta_utils import save_models
 from retinanet.utils import unnormalizer
 from utils.visutils import draw_line
+import debugging_settings
 
 
 class Training:
@@ -50,17 +51,13 @@ class Training:
         )
 
     @staticmethod
-    def write_images(dataloader, write_dir="~/st/Saffron/tmp/", image_names=None):
-        write_dir = osp.abspath(osp.expandvars(osp.expanduser(write_dir)))
-        if image_names is None:  # CSVDataset
-            img_names = [osp.splitext(osp.basename(name))[0]
-                         for name in dataloader.image_names]
-        else:  # pytorch dataloader
-            img_names = [osp.splitext(osp.basename(name))[0]
-                         for name in image_names]
-        if osp.isdir(write_dir):
-            shutil.rmtree(write_dir)
-        os.makedirs(write_dir)
+    def write_images(dataloader):
+        write_dir = osp.join(
+            debugging_settings.write_dir,
+            "train",
+            f"{debugging_settings.CYCLE_NUM:02d}",
+        )
+        os.makedirs(write_dir, exist_ok=True)
         print("writing annotations...")
         for i, data in enumerate(dataloader):
             im = data['img'].detach().cpu()
@@ -82,7 +79,7 @@ class Training:
                     distance_thresh=40,
                     line_thickness=2,
                 )
-            name = img_names[i]
+            name = data['name']
             writpe_path = osp.join(write_dir, name + '.jpg')
             cv2.imwrite(writpe_path, img)
             print("{0}/{1}".format(i + 1, len(dataloader)), end='\r')
@@ -159,6 +156,7 @@ class Training:
 
     def train(self, state_dict_path, models_directory, cycle_num=-1):
         train_loader = self._load_training_data()
+        # self.write_images(dataloader=train_loader)
         lr = 1e-5
         retinanet, optimizer, scheduler = self._load_model(
             state_dict_path=state_dict_path, num_classes=1, learning_rate=lr)
@@ -175,11 +173,12 @@ class Training:
                          optimizer=optimizer, scheduler=scheduler, mAP=mAP)
         num_cuda_errors = 0
         for epoch_num in range(self._epochs):
+            debugging_settings.EPOCH_NUM = epoch_num
             retinanet.train()
             retinanet.training = True
             epoch_loss = []
             for iter, data in enumerate(train_loader):
-                params = [data['img'].cuda().float(), data['annot']]
+                params = [data['img'].cuda().float(), data['annot'], data['name']]
                 optimizer.zero_grad()
                 try:
                     losses = retinanet(params)
@@ -321,6 +320,7 @@ class ActiveTraining(Training):
     def run_cycle(self, cycles, init_state_dict_path, models_directory):
         for i in range(1, cycles+1):
             print(f"Cycle: {i}")
+            debugging_settings.CYCLE_NUM = i
             state_dict_path = init_state_dict_path if (i == 1) else osp.join(
                 models_directory, f"cycle_{i - 1:02d}", "best_mAP_state_dict.pt")
             retinanet, _, _ = self._load_model(

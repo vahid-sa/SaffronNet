@@ -4,7 +4,7 @@ import logging
 from os import path as osp
 from utils.training_tools import ActiveTraining
 import retinanet
-
+import debugging_settings
 
 logging.basicConfig(level=logging.DEBUG)
 retinanet.settings.NUM_QUERIES = 100
@@ -25,7 +25,7 @@ class parser:
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
     active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
     save_directory = osp.expanduser("~/st/Saffron/imgs/")
-    epochs = 10
+    epochs = 30
     csv_val = osp.abspath("./annotations/validation.csv")
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
@@ -33,7 +33,7 @@ class parser:
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
     aggregator_type="avg"  # avg, sum
-    uncertainty_algorihm="least"  # bce, random
+    uncertainty_algorihm="random"  # bce, random
 
     @staticmethod
     def reset():
@@ -53,6 +53,9 @@ class parser:
         if osp.isfile(parser.metrics_path):
             os.remove(parser.metrics_path)
         shutil.copyfile(osp.abspath("./annotations/supervised.csv"), parser.active_annotations)
+        if osp.isdir(debugging_settings.write_dir):
+            shutil.rmtree(debugging_settings.write_dir)
+        os.makedirs(debugging_settings.write_dir)
 
 
 def main():

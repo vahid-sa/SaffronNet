@@ -1,26 +1,24 @@
 import os
-import json
-from re import L
-import shutil
 import numpy as np
-from cv2 import cv2
+import cv2
 import torch
 import torch.nn as nn
 from os import path as osp
 from .utils import calc_distance
 from .settings import NUM_VARIABLES, MAX_ANOT_ANCHOR_ANGLE_DISTANCE, MAX_ANOT_ANCHOR_POSITION_DISTANCE
 import retinanet
+import debugging_settings
 from utils.visutils import draw_line
 
 
 class FocalLoss(nn.Module):
     # def __init__(self):
 
-    def forward(self, classifications, regressions, anchors, annotations, imgs=None):
+    def forward(self, classifications, regressions, anchors, annotations, imgs, names):
         alpha = 0.95
         gamma = 2.0
         predictions = torch.add(anchors, regressions)
-        FocalLoss.write_images(annotations=annotations, imgs=imgs)
+        # FocalLoss.write_images(annotations=annotations, imgs=imgs, names=names)
         batch_size = classifications.shape[0]
         classification_losses = []
         xydistance_regression_losses = []
@@ -277,18 +275,19 @@ class FocalLoss(nn.Module):
         cv2.imwrite(write_path, img)
 
     @staticmethod
-    def write_images(annotations, imgs, write_dir="~/st/Saffron/tmp/"):
-        if imgs is None:
-            return 0
-        write_dir = osp.abspath(osp.expandvars(osp.expanduser(write_dir)))
+    def write_images(annotations, imgs, names):
+        write_dir = osp.join(
+            debugging_settings.write_dir,
+            "loss",
+            f"cycle_{debugging_settings.CYCLE_NUM:02d}",
+            f"epoch_{debugging_settings.EPOCH_NUM:03d}",
+        )
+        os.makedirs(write_dir, exist_ok=True)
         imgs = imgs.detach().cpu()
         imgs = imgs.permute(0, 2, 3, 1)
         imgs = imgs.numpy()
         annotations = annotations.detach().cpu().numpy()
-        os.makedirs(write_dir, exist_ok=True)
-        num_written_files = len(os.listdir(write_dir))
-        i = 0
-        for img, img_annotations in zip(imgs, annotations):
+        for name, img, img_annotations in zip(names, imgs, annotations):
             img = cv2.cvtColor(retinanet.utils.unnormalizer(image=img), cv2.COLOR_BGR2RGB)
             for annot in img_annotations:
                 x, y, alpha = annot[0], annot[1], annot[2]
@@ -302,8 +301,6 @@ class FocalLoss(nn.Module):
                     distance_thresh=40,
                     line_thickness=2,
                 )
-            i += 1
-            name = f"{num_written_files + i:03d}.jpg"
-            write_path = osp.join(write_dir, name)
+            write_path = osp.join(write_dir, name + ".jpg")
             cv2.imwrite(write_path, img)
         return 0

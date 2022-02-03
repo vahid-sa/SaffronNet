@@ -1,3 +1,4 @@
+from unicodedata import name
 import torch.nn as nn
 import torch
 import math
@@ -372,10 +373,11 @@ class VGGNet(nn.Module):
 
     def forward(self, inputs):
         if self.training:
-            img_batch, annotations = inputs
+            img_batch, annotations, names = inputs
         else:
             img_batch = inputs
             annotations = None
+            names = None
         x = self.vgg7bn(img_batch)
         regression = self.regressionModel(x)
         classification = self.classificationModel(x)
@@ -384,7 +386,7 @@ class VGGNet(nn.Module):
         self._predictions_store['regression'] = regression.detach().cpu().numpy()
         self._predictions_store['anchors'] = anchors.detach().cpu().numpy()
         if self.training:
-            return_value = self.focalLoss(classification, regression, anchors, annotations)  #, img_batch)
+            return_value = self.focalLoss(classification, regression, anchors, annotations, img_batch, names)  #, img_batch)
         else:
             return_value =  self.box_model(img_batch=img_batch, anchors=anchors, regression=regression, classification=classification)
         return return_value

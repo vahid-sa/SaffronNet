@@ -3,8 +3,6 @@ import enum
 import sys
 import os
 
-import cv2
-from numpy.lib import NumpyVersion
 import torch
 import numpy as np
 import random
@@ -14,9 +12,8 @@ from torch.utils.data import Dataset
 import imgaug as ia
 import imgaug.augmenters as iaa
 from imgaug.augmentables.kps import Keypoint, KeypointsOnImage
-from utils.visutils import DrawMode, draw_line, get_alpha, get_dots, std_draw_line, std_draw_points, normalize_alpha
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
+from utils.visutils import get_alpha, get_dots, normalize_alpha
+from torch.utils.data import Dataset
 
 from torch.utils.data.sampler import Sampler
 
@@ -157,11 +154,6 @@ class CSVDataset(Dataset):
         self.transform = transform
         self.img_dir = images_dir
         self.ext = image_extension
-        if save_output_img_directory is None:
-            self.save_output_img_directory = None
-        else:
-            self.save_output_img_directory = os.path.join(save_output_img_directory, "dataloader")
-            os.makedirs(self.save_output_img_directory, exist_ok=True)
         # parse the provided class file
         try:
             with self._open_for_csv(self.class_list) as file:
@@ -227,34 +219,17 @@ class CSVDataset(Dataset):
             result[class_name] = class_id
         return result
 
-    def write_img(self, img, idx, normalized=True):
-        img_name = os.path.basename(self.image_names[idx])
-        path = os.path.join(self.save_output_img_directory, img_name)
-        im = img.numpy() if isinstance(img, torch.Tensor) else img.copy()
-        if normalized:
-            mean = [0.485, 0.456, 0.406]
-            std = [0.229, 0.224, 0.225]
-            im = (im.astype(np.float64) * std + mean) * 255.0
-        im = cv2.cvtColor(im.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        cv2.imwrite(path, im)
-        return path
-
     def __len__(self):
         return len(self.image_names)
 
     def __getitem__(self, idx):
         img = self.load_image(idx)
         annot = self.load_annotations(idx)
-        original_annot = annot.copy()
+        name = os.path.splitext(os.path.basename(self.image_names[idx]))[0]
         sample = {'img': img, 'annot': annot}
         if self.transform:
             sample = self.transform(sample)
-        sample['orig_annot'] = original_annot
-        if self.save_output_img_directory is None:
-            sample['aug_img_path'] = None
-        else:
-            aug_img_path = self.write_img(img=sample["img"], idx=idx)
-            sample['aug_img_path'] = aug_img_path
+        sample['name'] = name
         return sample
 
     def load_image(self, image_index):
@@ -362,8 +337,8 @@ class CSVDataset(Dataset):
 def collater(data):
     imgs = [s['img'] for s in data]
     annots = [s['annot'] for s in data]
+    names = [s['name'] for s in data]
     scales = [s['scale'] for s in data]
-    aug_img_path = [s['aug_img_path'] for s in data]
 
     widths = [int(s.shape[0]) for s in imgs]
     heights = [int(s.shape[1]) for s in imgs]
@@ -395,7 +370,7 @@ def collater(data):
 
     padded_imgs = padded_imgs.permute(0, 3, 1, 2)
 
-    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales, 'aug_img_path': aug_img_path}
+    return {'img': padded_imgs, 'annot': annot_padded, 'scale': scales, 'name': names}
 
 
 class Resizer(object):

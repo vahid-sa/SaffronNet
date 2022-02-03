@@ -8,6 +8,7 @@ from retinanet.utils import load_classes
 from utils.prediction import detect
 from retinanet import dataloader
 from prediction import imageloader
+from utils.visutils import normalize_alpha
 
 
 class Active:
@@ -42,7 +43,7 @@ class Active:
             annotation[self._NAME] = int(row[self._NAME])
             annotation[self._X] = int(float(row[self._X]))
             annotation[self._Y] = int(float(row[self._Y]))
-            annotation[self._ALPHA] = int(float(row[self._ALPHA]))
+            annotation[self._ALPHA] = 90 - int(float(row[self._ALPHA]))
             annotation[self._LABEL] = class_to_index[row[self._LABEL]]
             annotations.append(annotation)
         fileIO.close()
@@ -177,7 +178,8 @@ class Active:
             row[self._NAME] = f"{int(annot[self._NAME]):03d}"
             row[self._X] = str(float(annot[self._X]))
             row[self._Y] = str(float(annot[self._Y]))
-            row[self._ALPHA] = str(float(annot[self._ALPHA]))
+            # row[self._ALPHA] = str(float(normalize_alpha(90 - annot[self._ALPHA])))
+            row[self._ALPHA] = str(float(90 - annot[self._ALPHA]))
             row[self._LABEL] = index_to_class[str(int(annot[self._LABEL]))]
             writer.writerow(row)
         fileIO.close()
