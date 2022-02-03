@@ -329,6 +329,6 @@ class ActiveTraining(Training):
             retinanet.eval()
             retinanet.training = False
             self._create_annotations(model=retinanet)
-            self._log_active_annotations_metrics(num_cycle=i)
             self.train(state_dict_path=state_dict_path, models_directory=osp.join(
                 models_directory, f"cycle_{i:02d}"), cycle_num=i)
+            self._log_active_annotations_metrics(num_cycle=i)
