@@ -71,7 +71,9 @@ class Active:
     def _select_uncertain_boxes(self, budget):
         indices = list()
         if self._uncertainty_algorithm == "least":
-            scores = (0.5 - np.abs(self._boxes[:, self._SCORE] - 0.5)) * 2
+            focus = 0.52
+            cs = self._boxes[:, self._SCORE]
+            scores = 1.0 - (np.abs(cs - focus) / focus)
         else:
             scores = np.random.uniform(low=0.0, high=1.0, size=self._boxes.shape[0])
         sorted_indices = np.argsort(scores)[::-1]
