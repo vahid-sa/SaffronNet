@@ -32,8 +32,8 @@ class parser:
     budget = 100
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
-    aggregator_type="avg"  # avg, sum
-    uncertainty_algorihm="random"  # bce, random
+    aggregator_type="max"  # avg, sum, max
+    uncertainty_algorihm="least"  # bce, random, least
 
     @staticmethod
     def reset():
