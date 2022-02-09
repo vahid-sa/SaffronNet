@@ -424,7 +424,7 @@ class BoxesModel(nn.Module):
             anchors_nms_idx = nms(
                 anchorBoxes,
                 scores,
-                min_score=0.5)
+                min_score=0.35)
             if len(anchors_nms_idx) == 0:
                 continue
             finalResult[0].extend(scores[anchors_nms_idx])
