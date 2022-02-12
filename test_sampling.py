@@ -79,20 +79,19 @@ for index, sample in enumerate(active_loader):
     img = sample['img']
     img = unnormalizer(img.detach().cpu().numpy())
     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    # img_boxes = pred_boxes[pred_boxes[:, 0] == name]
+    img_boxes = pred_boxes[pred_boxes[:, 0] == int(sample['name'])]
     # annots = sample['annot'].detach().cpu().numpy()
-    for annot in sample["annot"]:
-        x, y, alpha = annot[0], annot[1], annot[2]
-        img = draw_line(img, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
-                        distance_thresh=40, line_thickness=2)
-    """
     for box in img_boxes:
         x, y, alpha = int(box[1]), int(box[2]), int(box[3])
         score = box[5]
         img = draw_line(img, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True,
                         distance_thresh=40, line_thickness=2)
-        cv2.putText(img, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
-    """
+    for annot in sample["annot"]:
+        x, y, alpha = annot[0], annot[1], annot[2]
+        img = draw_line(img, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True,
+                        distance_thresh=40, line_thickness=2)
+        # cv2.putText(img, str(round(score, 2)), (x + 3, y + 3), cv2.FONT_HERSHEY_COMPLEX_SMALL, 1, (0, 0, 255), 2)
+
     write_path = osp.join(write_dir, f"{sample['name']}.jpg")
     cv2.imwrite(write_path, img)
 
