@@ -311,6 +311,7 @@ class ActiveTraining(Training):
             "num_cycle": num_cycle,
             "num_labels": label_count,
             "num_images": img_count,
+            "image_names": img_numbers,
         }
         self._active_metrics["active"].append(metrics)
         if self._metrics_path is not None:
