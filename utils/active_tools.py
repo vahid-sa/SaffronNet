@@ -1,6 +1,7 @@
 import os
 import shutil
 import logging
+import math
 import numpy as np
 import csv
 import glob
@@ -28,7 +29,8 @@ class Active:
         self._supervised_string_file_numbers = Active._load_supervised_string_file_numbers(string_file_number_path=image_string_file_numbers_path) if self._write_supervised_data else None
         self._supervised_annotations_path = supervised_annotations_path if self._write_supervised_data else None
         self._uncertainty_algorithm = uncertainty_algorithm
-        assert self._uncertainty_algorithm in ("least", "random"), f"incorrect uncertainty algorithm {self._uncertainty_algorithm}"
+        self._ss = SamplingStrategy()
+        assert self._uncertainty_algorithm in ("least", "strategic", "random"), f"incorrect uncertainty algorithm {self._uncertainty_algorithm}"
         if osp.isdir(self._states_dir):
             shutil.rmtree(self._states_dir)
         os.makedirs(self._states_dir, exist_ok=False)
@@ -74,9 +76,15 @@ class Active:
             focus = 0.52
             cs = self._boxes[:, self._SCORE]
             scores = 1.0 - (np.abs(cs - focus) / focus)
+            sorted_indices = np.argsort(scores)[::-1]
+        elif self._uncertainty_algorithm == "strategic":
+            cs = self._boxes[:, self._SCORE]
+            scores = self._ss.get_probabilities(data=cs)
+            indices_ = np.random.choice(len(scores), scores.shape, replace=False, p=scores)
+            sorted_indices = indices_
         else:
             scores = np.random.uniform(low=0.0, high=1.0, size=self._boxes.shape[0])
-        sorted_indices = np.argsort(scores)[::-1]
+            sorted_indices = np.argsort(scores)[::-1]
         sorted_boxes = self._boxes[sorted_indices]
         i = -1
         while len(indices) < budget:
@@ -322,3 +330,75 @@ class Active:
     @property
     def ground_truth_annotations(self):
         return self._gt_annotations
+
+
+class SamplingStrategy:
+    def __init__(self, mean: float=0.5, std1: float = 0.25, std2: float = 0.05):
+        x, distribution = SamplingStrategy.create_distribution(
+            mean=mean,
+            std1=max(std1, std2),
+            std2=min(std1, std2),
+        )
+        self._x: np.ndarray = x
+        self._distribution: np.ndarray = distribution
+        self._normalized_distribution: np.ndarray = SamplingStrategy.normalize(distribution)
+
+    @staticmethod
+    def gauss(x: np.ndarray, mean: float, std: float) -> np.ndarray:
+        standard_data = np.square((x - mean) / std)
+        power = np.negative(standard_data * 0.5)
+        coef = 1.0 / (std * math.sqrt(2 * math.pi))
+        distribution = coef * np.exp(power)
+        return distribution
+
+    @staticmethod
+    def scale(x: np.ndarray, new_max: float, new_min: float) -> np.ndarray:
+        x_max = x.max()
+        x_min = x.min()
+        x_diff = x_max - x_min
+        new_diff = new_max - new_min
+        x_from_min = x - x_min
+        scaled_x = x_from_min / x_diff * new_diff + new_min
+        return scaled_x
+
+    def normalize(x: np.ndarray) -> np.ndarray:  # normalize data ro sum to 1
+        exp = np.exp(x)
+        normal_x = exp / np.sum(exp)
+        return normal_x
+
+    @staticmethod
+    def create_distribution(mean: float, std1: float, std2: float) -> tuple:
+        x: np.ndarray = np.around(np.arange(0.0, 1.0001, 0.0001), decimals=4)
+        distribution1 = SamplingStrategy.gauss(x=x, mean=mean, std=std1)
+        distribution2 = SamplingStrategy.gauss(x=x, mean=mean, std=std2)
+        scaled_distribution2 = SamplingStrategy.scale(x=distribution2, new_max=np.max(distribution1), new_min=np.min(distribution1))
+        distributions = np.hstack((distribution1[:, np.newaxis], scaled_distribution2[:, np.newaxis]))
+        distribution = np.zeros(shape=x.shape, dtype=np.float64)
+        distribution[x <= 0.5] = np.min(distributions[x <= 0.5], axis=1)
+        distribution[x > 0.5] = np.max(distributions[x > 0.5], axis=1)        
+        return x, distribution
+
+    def get_probabilities(self, data: np.ndarray, from_normal: bool = False, normalize: bool = True) -> np.ndarray:
+        assert (np.min(data) >= 0) and (np.max(data) <= 1), "data out of valid range [0, 1]"
+        rounded_data = np.around(data, decimals=4)
+        x: list = self._x.tolist()
+        data_indices_in_x = [x.index(d) for d in rounded_data]
+        if from_normal:
+            probabilities = self._normalized_distribution[data_indices_in_x]
+        elif normalize:
+            probabilities = SamplingStrategy.normalize(self._distribution[data_indices_in_x])
+        else:
+            probabilities = self._distribution[data_indices_in_x]
+        return probabilities
+
+    @property
+    def x(self) -> np.ndarray:
+        return self._x
+
+    @property
+    def distribution(self) -> np.ndarray:
+        return self._distribution
+    
+    @property
+    def normalized_distribution(self) -> np.ndarray:
+        return self._normalized_distribution

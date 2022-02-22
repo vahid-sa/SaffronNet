@@ -231,12 +231,12 @@ class ActiveTraining(Training):
         classes_path,
         states_dir,
         images_dir,
+        radius,
         uncertainty_algorithm="least",
         metrics_path=None,
         supervised_annotations_path=None,
         filenames_path=None,
         epochs=50,
-        radius=50,
         use_gpu=True,
     ):
         super().__init__(active_annotations_path, validation_file_path, classes_path, states_dir, images_dir, metrics_path=metrics_path, epochs=epochs, use_gpu=use_gpu)

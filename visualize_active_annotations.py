@@ -31,6 +31,7 @@ class Args:
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
     budget = 100
+    radius=50,
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
     uncertainty_algorithm = "least"
@@ -74,7 +75,7 @@ gt_loader = dataloader.CSVDataset(
 active = Active(
     loader=image_loader,
     states_dir=Args.states_dir,
-    radius=50,
+    radius=Args.radius,
     image_string_file_numbers_path=Args.filenames,
 )
 

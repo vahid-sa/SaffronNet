@@ -30,9 +30,10 @@ class parser:
     save_models_directory = osp.expanduser("~/st/Saffron/weights/active")
     cycles = 10
     budget = 100
+    radius=25
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
-    uncertainty_algorithm = "least"
+    uncertainty_algorithm = "strategic"  # least, strategic, random
 
     @staticmethod
     def reset():
@@ -67,6 +68,7 @@ def main():
         supervised_annotations_path=parser.supervised_annotations,
         filenames_path=parser.filenames,
         epochs=parser.epochs,
+        radius=parser.radius,
         uncertainty_algorithm=parser.uncertainty_algorithm,
     )
     active_trainer.run_cycle(
