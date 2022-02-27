@@ -1,4 +1,5 @@
 import logging
+import math
 import numpy as np
 import csv
 from os import path as osp
@@ -21,6 +22,7 @@ class Active:
         budget: int = 2,
         aggregator_type: str = "max",
         uncertainty_algorithm: str = "least",
+        is_strategic: bool = True,
     ):
         self._NAME, self._X, self._Y, self._ALPHA, self._LABEL, self._SCORE = 0, 1, 2, 3, 4, 5
         self._loader = loader
@@ -33,6 +35,10 @@ class Active:
 
         self._boxes: np.ndarray = None
         self._uncertain_image_list: np.ndarray = None
+        self._is_strategic = is_strategic
+        if self._is_strategic:
+            self._aggregator_type = "max"
+            self._uncertainty_algorithm = "least"
 
     def _load_annotations(self) -> np.ndarray:
         class_to_index, _ = load_classes(csv_class_list_path=self._class_list_path)
@@ -136,7 +142,15 @@ class Active:
         if len(not_selected_img_uncertainty_scores) == 0:
             uncertain_img_names =  []
         else:
-            sorted_img_uncertainty_scores = not_selected_img_uncertainty_scores[np.argsort(not_selected_img_uncertainty_scores[:, 1])[::-1]]
+            if self._is_strategic:
+                us = not_selected_img_uncertainty_scores[:, 1]
+                sqrt_scores = np.sqrt(us)
+                scores = np.exp(sqrt_scores) / np.sum(np.exp(sqrt_scores))
+                indices_ = np.random.choice(
+                    len(scores), scores.shape, replace=False, p=scores)
+                sorted_img_uncertainty_scores = not_selected_img_uncertainty_scores[indices_]
+            else:
+                sorted_img_uncertainty_scores = not_selected_img_uncertainty_scores[np.argsort(not_selected_img_uncertainty_scores[:, 1])[::-1]]
             num_annotations = 0
             diff_annots_budget = self._budget
             index = -1
