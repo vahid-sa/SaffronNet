@@ -3,5 +3,24 @@
     "python.linting.pylintEnabled": true,
     "python.linting.flake8Enabled": false,
     "python.linting.prospectorEnabled": false,
-    "python.linting.pycodestyleEnabled": false
+    "python.linting.pycodestyleEnabled": false,
+    "cSpell.words": [
+        "annotaions",
+        "anotation",
+        "anotations",
+        "astype",
+        "belogs",
+        "cuda",
+        "dxys",
+        "finfo",
+        "mpre",
+        "mrec",
+        "prec",
+        "pyplot",
+        "rcnn",
+        "ucilidian",
+        "unsqueeze",
+        "xlabel",
+        "ylabel"
+    ]
 }

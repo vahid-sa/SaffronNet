@@ -4,7 +4,7 @@ from enum import Enum
 import numpy as np
 import logging
 from typing import Tuple
-from cv2 import cv2 as cv
+import cv2 as cv
 from os import path as osp
 from retinanet.settings import ACC, DEC, RAW
 POINT = Tuple[float, float]
@@ -192,6 +192,7 @@ def get_alpha(x0, y0, x1, y1):
     alpha = (np.arctan2(y, x) / math.pi) * 180
     return normalize_alpha(alpha)
 
+
 class Visualizer:
     def __init__(self):
         pass
@@ -207,16 +208,31 @@ class Visualizer:
         predictions_store=None,
     ):
         path = osp.join(write_dir, f"{image_name:03d}.jpg")
-        """
         for ann in annotations:
             x, y, alpha = int(ann[0]), int(ann[1]), int(ann[2])
-            image = draw_line(image, (x, y), alpha, line_color=(0, 0, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+            image = draw_line(
+                image, (x, y), alpha, line_color=(0, 0, 0),
+                center_color=(0, 0, 0), half_line=True,
+                distance_thresh=40, line_thickness=2)
         for det in declined_predictions:
             x, y, alpha, score = det.astype(np.int64)
-            image = draw_line(image, (x, y), alpha, line_color=(0, 0, 255), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+            image = draw_line(
+                image, (x, y), alpha, line_color=(0, 0, 255),
+                center_color=(0, 0, 0), half_line=True,
+                distance_thresh=40, line_thickness=2)
         for det in accepted_predictions:
             x, y, alpha, score = det.astype(np.int64)
-            image = draw_line(image, (x, y), alpha, line_color=(0, 255, 0), center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+            image = draw_line(
+                image, (x, y), alpha, line_color=(0, 255, 0),
+                center_color=(0, 0, 0), half_line=True, distance_thresh=40, line_thickness=2)
+        cv.putText(
+            image, f"{len(accepted_predictions)}",
+            (50, 50), cv.FONT_HERSHEY_SIMPLEX,
+            1, (0, 255, 0), thickness=2)
+        cv.putText(
+            image, f"{len(declined_predictions)}",
+            (50, 100), cv.FONT_HERSHEY_SIMPLEX,
+            1, (0, 0, 255), thickness=2)
         """
         if predictions_store is not None:
             image = image.astype(np.float64)
@@ -229,14 +245,14 @@ class Visualizer:
             predictions = anchors.astype(np.int64)
             x = predictions[:, 0]
             y = predictions[:, 1]
-            print(f"image: {image.shape} | x: {x.max()} & {x.min()} & {x.shape} | y: {y.max()} & {x.min()} & {x.shape}")
-            print("anchors: {0}".format(anchors.max(axis=0)))
+            # print(f"image: {image.shape} | x: {x.max()} & {x.min()} & {x.shape} | y: {y.max()} & {x.min()} & {x.shape}")
+            # print("anchors: {0}".format(anchors.max(axis=0)))
             y[y == image.shape[0]] = image.shape[0] - 1
             x[x == image.shape[1]] = image.shape[1] - 1
             yx = np.concatenate((y[:, np.newaxis], x[:, np.newaxis]), axis=1)
-            print(yx.shape)
+            # print(yx.shape)
             bg_yx = yx[bg]
-            print("bg_yx", bg_yx.shape, bg_yx.dtype)
+            # print("bg_yx", bg_yx.shape, bg_yx.dtype)
             for position in bg_yx:
                 try:
                     image[position[0] + 5, position[1]] = 255
@@ -248,4 +264,5 @@ class Visualizer:
             # print("regressions: {0} | {1}".format(regressions.shape, regressions.dtype))
             # print("anchors: {0} | {1}".format(anchors.shape, anchors.dtype))
             image = image.astype(np.uint8)
+            """
         cv.imwrite(path, image)

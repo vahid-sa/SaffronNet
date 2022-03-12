@@ -1,14 +1,12 @@
 from __future__ import print_function
 from retinanet.dataloader import CSVDataset
 import numpy as np
-from cv2 import cv2 as cv
+import cv2 as cv
 import matplotlib.pyplot as plt
 import matplotlib.pyplot as plt
 import torch
 from .settings import NUM_VARIABLES
 from retinanet.utils import compute_distance
-
-
 
 
 def _compute_ap(recall, precision):
@@ -157,40 +155,53 @@ def evaluate(
 
     # gather all detections and annotations
     predictions_stores = []
+    # get all predictions for add images from model
     all_detections = _get_detections(
         generator, retinanet, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path, predictions_stores=predictions_stores)
+    # load all annotaions
     all_annotations = _get_annotations(generator)
 
     average_precisions = {}
 
+    # for ech class
     for label in range(generator.num_classes()):
         false_positives = np.zeros((0,))
         true_positives = np.zeros((0,))
         scores = np.zeros((0,))
         num_annotations = 0.0
-
+        # for each image index
         for i in range(len(generator)):
+            # load all i'th image predictions with class 'label'
             detections = all_detections[i][label]
+            # load all i'th image anotations with class 'label'
             annotations = all_annotations[i][label]
             num_annotations += annotations.shape[0]
             detected_annotations = []
-            acc_pred = []
-            dec_pred = []
+            acc_pred = []  # accepted predictions
+            dec_pred = []  # declined predictions
+            # choose one model prediction, belogs to i'th image and class 'label'
             for d in detections:
+                # colllect prediction score for this model prediction
                 scores = np.append(scores, d[NUM_VARIABLES])
-
+                # if there is no anotation for this image.
                 if annotations.shape[0] == 0:
                     false_positives = np.append(false_positives, 1)
                     true_positives = np.append(true_positives, 0)
+                    # go to next prediction.
                     continue
 
+                # Compute annotations distances from the current prediction.
+                # dxys: ucilidian distance of centers.
+                # dangels: distance of angles.
                 dxys, dangels = compute_distance(
                     np.expand_dims(d, axis=0), annotations)
 
+                # determine which anotation index fit to this prediction.
                 assigned_annotation = np.argmin(dxys, axis=1)
                 min_dxy = dxys[0, assigned_annotation]
                 min_dangel = dangels[0, assigned_annotation]
 
+                # if this anotation is good enough, and not assigned previously.
                 if min_dxy <= XYd_threshold and min_dangel <= Ad_threshold and assigned_annotation not in detected_annotations:
                     false_positives = np.append(false_positives, 0)
                     true_positives = np.append(true_positives, 1)
@@ -206,8 +217,8 @@ def evaluate(
                 img = (img * 255).astype(np.float32)
                 img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
                 visualizer(image=img, image_name=i, accepted_predictions=acc_pred,
-                           declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir,
-                           predictions_store=predictions_stores[i])
+                        declined_predictions=dec_pred, annotations=annotations, write_dir=write_dir,
+                        predictions_store=predictions_stores[i])
 
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
