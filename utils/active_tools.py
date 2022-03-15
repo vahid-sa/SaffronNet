@@ -6,7 +6,7 @@ import numpy as np
 import csv
 import glob
 import json
-from cv2 import cv2
+import cv2
 from os import path as osp
 
 from retinanet.utils import ActiveLabelMode, load_classes, ActiveLabelModeSTR
