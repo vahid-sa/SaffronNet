@@ -72,7 +72,8 @@ class Active:
             np.ndarray: (N,) 0 < least confidence scores < 1
         """
         distance = np.abs(np.subtract(classification_scores, 0.5))
-        least_confidence_scores = np.subtract(1.0, distance)
+        normal_distance = np.true_divide(distance, 0.5)
+        least_confidence_scores = np.subtract(1.0, normal_distance)
         return least_confidence_scores
 
     @staticmethod
