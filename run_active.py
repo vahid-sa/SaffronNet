@@ -16,14 +16,17 @@ class parser:
     ground_truth_annotations = osp.abspath("annotations/unsupervised.csv")
     csv_classes = osp.abspath("annotations/labels.csv")
     images_dir = osp.expanduser("~/Saffron/dataset/Train/")
-    corrected_annotations = osp.expanduser("~/Saffron/active_annotations/corrected.csv")
+    corrected_annotations = osp.expanduser(
+        "~/Saffron/active_annotations/corrected.csv")
     filenames = osp.abspath("annotations/filenames.json")
     partition = "unsupervised"
     ext = ".jpg"
     model_path = osp.expanduser('~/Saffron/weights/supervised/init_model.pt')
-    state_dict_path = osp.expanduser('~/Saffron/init_fully_trained_weights/init_state_dict.pt')
+    state_dict_path = osp.expanduser(
+        '~/Saffron/init_fully_trained_weights/init_state_dict.pt')
     states_dir = osp.expanduser("~/Saffron/active_annotations/states")
-    active_annotations = osp.expanduser("~/Saffron/active_annotations/train.csv")
+    active_annotations = osp.expanduser(
+        "~/Saffron/active_annotations/train.csv")
     save_directory = osp.expanduser("~/st/Saffron/imgs/")
     epochs = 30
     csv_val = osp.abspath("./annotations/validation.csv")
@@ -32,8 +35,8 @@ class parser:
     budget = 100
     supervised_annotations = osp.abspath("./annotations/supervised.csv")
     metrics_path = osp.expanduser("~/st/Saffron/metrics.json")
-    aggregator_type="sum"  # avg, sum, max
-    uncertainty_algorihm="least"  # bce, random, least
+    aggregator_type = "avg"  # avg, sum, max
+    uncertainty_algorihm = "least"  # bce, random, least
 
     @staticmethod
     def reset():
@@ -52,7 +55,8 @@ class parser:
         os.makedirs(parser.save_models_directory, exist_ok=False)
         if osp.isfile(parser.metrics_path):
             os.remove(parser.metrics_path)
-        shutil.copyfile(osp.abspath("./annotations/supervised.csv"), parser.active_annotations)
+        shutil.copyfile(osp.abspath(
+            "./annotations/supervised.csv"), parser.active_annotations)
         if osp.isdir(debugging_settings.write_dir):
             shutil.rmtree(debugging_settings.write_dir)
         os.makedirs(debugging_settings.write_dir)
@@ -78,6 +82,7 @@ def main():
         init_state_dict_path=parser.state_dict_path,
         models_directory=parser.save_models_directory,
     )
+
 
 if __name__ == "__main__":
     main()
